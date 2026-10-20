@@ -52,6 +52,39 @@ impl World {
 }
 
 #[test]
+fn a_selected_sam21_sample_names_it_without_substituting_sam3() {
+    use craft_ai_core::{Payload, Request};
+    let world = World::new();
+    let mut subject = feature("select-subject");
+    subject
+        .locals
+        .iter_mut()
+        .find(|r| r.workflow == "sam21-segment")
+        .unwrap()
+        .usable = true;
+    world
+        .desk("launcher")
+        .enable_local_recipe(&subject, "sam21-segment", "http://127.0.0.1:8101")
+        .unwrap();
+    let request = Request::new(subject.capability.clone())
+        .with_input(
+            InputRole::Source,
+            Payload::inline("image/png", vec![1, 2, 3]).unwrap(),
+        )
+        .with_input(InputRole::Prompt, Payload::text("person"));
+    assert_eq!(
+        world
+            .desk("launcher")
+            .local_subject_sample(&role(), request)
+            .unwrap(),
+        Some((
+            "sam21-segment".to_owned(),
+            "http://127.0.0.1:8101".to_owned()
+        ))
+    );
+}
+
+#[test]
 fn enabling_the_local_model_writes_a_local_connection_offering_it_for_the_tool() {
     let w = World::new();
     let done = w
@@ -190,10 +223,43 @@ fn only_a_local_address_and_only_a_runnable_local_recipe_are_accepted() {
     );
     // A recipe that cannot run yet is not offered as ready.
     let mut later = feature("select-subject");
-    if let Some(local) = later.local.as_mut() {
+    for local in &mut later.locals {
         local.usable = false;
     }
     assert!(desk.enable_local(&later, SAM3_URL).is_err());
+    let store = w.shared.load().unwrap();
+    assert!(
+        store.connections.is_empty() && store.defaults.is_empty(),
+        "nothing written"
+    );
+}
+
+#[test]
+fn a_named_recipe_that_cannot_run_yet_is_refused_and_nothing_is_written() {
+    let w = World::new();
+    let desk = w.desk("launcher");
+    // As shipped, SAM 2 and SAM 1 can be set up but no app runs them.
+    for workflow in ["sam2-segment", "sam1-segment"] {
+        assert!(
+            desk.enable_local_recipe(&feature("select-subject"), workflow, SAM3_URL)
+                .is_err(),
+            "{workflow}"
+        );
+    }
+    // A recipe that runs today is refused the moment it is marked as not runnable.
+    let mut later = feature("select-subject");
+    for local in &mut later.locals {
+        local.usable = false;
+    }
+    assert!(
+        desk.enable_local_recipe(&later, "sam21-segment", SAM3_URL)
+            .is_err()
+    );
+    // A name that matches no recipe is refused too.
+    assert!(
+        desk.enable_local_recipe(&feature("select-subject"), "no-such-model", SAM3_URL)
+            .is_err()
+    );
     let store = w.shared.load().unwrap();
     assert!(
         store.connections.is_empty() && store.defaults.is_empty(),
@@ -209,9 +275,16 @@ fn the_picker_then_lists_sam_3_as_ready_not_as_something_to_install() {
         .unwrap();
     let options = craft_ai_features::setup_options(&craft_ai_features::builtin());
     let view = w.client("photocraft").picker(&role(), &options).unwrap();
-    assert_eq!(view.groups.len(), 1);
-    assert_eq!(view.groups[0].state, GroupState::Ready);
-    assert!(view.groups[0].models[0].selected);
+    let ready: Vec<_> = view
+        .groups
+        .iter()
+        .filter(|group| group.state == GroupState::Ready)
+        .collect();
+    assert_eq!(ready.len(), 1);
+    assert!(ready[0].models[0].selected);
+    // Other engines are separate choices, but the configured ComfyUI is not offered for setup again.
+    assert!(!view.groups.iter().any(|group| matches!(&group.setup,
+        Some(craft_ai_client::SetupLink::New { option }) if option == "local:select-subject")));
     assert!(view.current.unwrap().problem.is_none());
 }
 

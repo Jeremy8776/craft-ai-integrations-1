@@ -8,6 +8,8 @@ bad mutant (fix the mutant). Cargo runs serially, targeted with `-p`, with `-j 8
 | Script | Groups |
 |---|---|
 | `mutation_check.py` | `u1 u3 u4 p4 p10 v1 v2 v3 sd lc lr nr ct u2` (connections, model sources, node packs, media, client flows, declarative adapter). Cases for `u2` are in `mutation_u2.py`. |
+| `mutation_check.py ns` | Built-in setup: selected engine, separate files, shared destination, licence, cancellation, hashes, safe names, setup-session approval/stale answers, widget gating and consent duration. Cases in `mutation_native_setup.py`. |
+| `mutation_check.py ca` | Upstream contract alignment: model-test address provenance, required inputs, and app-facing refusal before key access. Cases in `mutation_contract.py`. |
 | `mutation_check.py ps` | Node pack status report (`pack/status.rs`): links, hidden folders, names, the install record. |
 | `mutation_check.py lg` | Remembered licences (`registry/licences.rs`, `install.rs`): terms, versions, local files, damaged record. |
 | `sam3_mutation_check.py` | `sg1 sg2 sg2b sg2c sg3` (SAM 3 masks, sessions, slots, cancel). |

@@ -56,17 +56,23 @@ fn the_catalogue_is_complete_and_consistent() {
 #[test]
 fn recipes_carry_checkable_files() {
     for f in builtin() {
-        let Some(local) = f.local else { continue };
-        for m in local.models {
-            assert_eq!(m.sha256.len(), 64, "{}", m.filename);
-            assert!(
-                m.sha256
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            );
-            assert!(m.size_bytes > 0);
-            assert!(m.source.url().starts_with("https://"));
-            assert!(!m.filename.contains(['/', '\\']) && !m.folder.contains(['/', '\\', '.']));
+        for local in &f.locals {
+            for m in &local.models {
+                assert_eq!(m.sha256.len(), 64, "{}", m.filename);
+                assert!(
+                    m.sha256
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                );
+                assert!(m.size_bytes > 0);
+                assert!(m.source.url().starts_with("https://"));
+                // A bundle keeps its files in one sub-folder: up to three plain names, no dots at the start.
+                assert!(m.filename.split('/').count() <= 3);
+                assert!(m.filename.split('/').all(|part| !part.is_empty()
+                    && !part.starts_with('.')
+                    && !part.contains(['\\', ':'])));
+                assert!(!m.folder.contains(['/', '\\', '.']));
+            }
         }
     }
 }
@@ -74,7 +80,7 @@ fn recipes_carry_checkable_files() {
 #[test]
 fn the_sam3_recipe_matches_the_real_file() {
     // Size and checksum of the file the Hugging Face copy serves and of the copy checked on the maintainer's machine.
-    let m = &feature("select-subject").local.unwrap().models[0];
+    let m = &feature("select-subject").locals[0].models[0];
     assert_eq!(m.size_bytes, 3_449_860_632);
     assert_eq!(
         m.sha256,
@@ -91,6 +97,174 @@ fn the_sam3_recipe_matches_the_real_file() {
 fn no_user_text_uses_an_em_dash() {
     let json = serde_json::to_string(&builtin()).unwrap();
     assert!(!json.contains('\u{2014}') && !json.contains('\u{2013}'));
+}
+
+#[test]
+fn select_subject_offers_every_sam_generation_as_its_own_recipe() {
+    let f = feature("select-subject");
+    let labels: Vec<&str> = f.locals.iter().map(|r| r.label.as_str()).collect();
+    assert_eq!(labels, ["SAM 3", "SAM 2.1", "SAM 2", "SAM 1"]);
+    let workflows: Vec<&str> = f.locals.iter().map(|r| r.workflow.as_str()).collect();
+    assert_eq!(
+        workflows,
+        [
+            "sam3-segment",
+            "sam21-segment",
+            "sam2-segment",
+            "sam1-segment"
+        ]
+    );
+}
+
+#[test]
+fn sam21_app_route_is_available_without_enabling_unadopted_models() {
+    let subject = feature("select-subject");
+    let available: Vec<_> = subject
+        .locals
+        .iter()
+        .map(|r| (r.workflow.as_str(), r.usable))
+        .collect();
+    assert_eq!(
+        available,
+        [
+            ("sam3-segment", true),
+            ("sam21-segment", true),
+            ("sam2-segment", false),
+            ("sam1-segment", false)
+        ]
+    );
+}
+
+#[test]
+fn the_sam21_recipe_names_the_exact_file_its_loader_reads_at_default_precision() {
+    let f = feature("select-subject");
+    let r = f
+        .locals
+        .iter()
+        .find(|r| r.workflow == "sam21-segment")
+        .unwrap();
+    let m = &r.models[0];
+    assert_eq!(
+        (m.folder.as_str(), m.filename.as_str()),
+        ("sam2", "sam2.1_hiera_large-fp16.safetensors")
+    );
+    assert_eq!(m.size_bytes, 448_999_828);
+    assert_eq!(
+        m.sha256,
+        "278af5296fcc153aa94645a4981e93fe8b7a936a9fa27dbd71e8c850df6d7038"
+    );
+    assert_eq!(
+        m.source.url(),
+        "https://huggingface.co/Kijai/sam2-safetensors/resolve/f885607d88bb3f9145efa49c3e3c50a9e5bf13eb/sam2.1_hiera_large-fp16.safetensors"
+    );
+}
+
+#[test]
+fn the_sam2_recipe_matches_the_real_file() {
+    let f = feature("select-subject");
+    let r = f
+        .locals
+        .iter()
+        .find(|r| r.workflow == "sam2-segment")
+        .unwrap();
+    let m = &r.models[0];
+    assert_eq!(
+        (m.folder.as_str(), m.filename.as_str()),
+        ("sam2", "sam2_hiera_large.safetensors")
+    );
+    assert_eq!(m.size_bytes, 897_827_480);
+    assert_eq!(
+        m.sha256,
+        "ad781e6f18af5d7523075642f5da2d2b874cec6b16cebfd4f6ea1c6a289d9605"
+    );
+    // The packs that run it: SAM 2 itself and the text detector that finds the words.
+    assert!(r.packs.iter().any(|p| {
+        p.folder_names
+            .iter()
+            .any(|n| n == "comfyui-segment-anything-2")
+    }));
+    assert!(
+        r.packs
+            .iter()
+            .any(|p| p.folder_names.iter().any(|n| n == "comfyui-florence2"))
+    );
+}
+
+#[test]
+fn the_sam1_recipe_needs_the_checkpoint_here_plus_a_text_detector_and_its_language_model() {
+    let f = feature("select-subject");
+    let r = f
+        .locals
+        .iter()
+        .find(|r| r.workflow == "sam1-segment")
+        .unwrap();
+    let names: Vec<&str> = r.models.iter().map(|m| m.filename.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "sam_vit_b_01ec64.pth",
+            "groundingdino_swint_ogc.pth",
+            "GroundingDINO_SwinT_OGC.cfg.py",
+            "model.safetensors",
+            "config.json",
+            "vocab.txt",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ]
+    );
+    let vitb = &r.models[0];
+    assert_eq!(vitb.folder, "sams");
+    assert_eq!(vitb.size_bytes, 375_042_383);
+    assert_eq!(
+        vitb.sha256,
+        "ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912"
+    );
+    let dino = &r.models[1];
+    assert_eq!(dino.folder, "grounding-dino");
+    assert_eq!(dino.size_bytes, 693_997_677);
+    assert_eq!(
+        dino.sha256,
+        "3b3ca2563c77c69f651d7bd133e97139c186df06231157a64c507099c52bc799"
+    );
+    assert!(r.packs.iter().any(|p| {
+        p.folder_names
+            .iter()
+            .any(|n| n == "comfyui_segment_anything")
+    }));
+}
+
+#[test]
+fn every_recipe_gets_its_own_plan() {
+    let f = feature("select-subject");
+    let mut inv = have_sam3();
+    inv.files.push(InstalledFile {
+        folder: "sams".into(),
+        filename: "sam_vit_b_01ec64.pth".into(),
+        size_bytes: 375_042_383,
+    });
+    let all = plans(&f, &inv);
+    assert_eq!(all.len(), 4);
+    let find = |workflow: &str| {
+        all.iter()
+            .find(|p| p.recipe == workflow)
+            .unwrap_or_else(|| panic!("no plan for {workflow}"))
+    };
+    assert_eq!(find("sam3-segment").state, State::Ready);
+    let sam21 = find("sam21-segment");
+    assert_eq!(sam21.state, State::NeedsInstall);
+    // The checkpoint plus the 10 Florence-2-large detector files (1,556,213,789 bytes).
+    assert_eq!(sam21.download_bytes, 448_999_828 + 1_556_213_789);
+    let sam2 = find("sam2-segment");
+    assert_eq!(sam2.state, State::NeedsInstall);
+    assert_eq!(sam2.download_bytes, 897_827_480 + 1_556_213_789);
+    let sam1 = find("sam1-segment");
+    assert_eq!(sam1.state, State::NeedsInstall);
+    // The SAM 1 checkpoint is already here; the detector, its config and the language model are not.
+    assert_eq!(sam1.missing_files.len(), 7);
+    assert_eq!(
+        sam1.download_bytes,
+        693_997_677 + 1_006 + 440_449_768 + 570 + 231_508 + 466_062 + 48
+    );
 }
 
 #[test]
@@ -149,7 +323,7 @@ fn only_the_pack_missing_still_needs_install_but_downloads_nothing() {
 #[test]
 fn a_licence_shared_by_two_files_is_asked_once() {
     let mut f = feature("select-subject");
-    let local = f.local.as_mut().unwrap();
+    let local = &mut f.locals[0];
     let mut second = local.models[0].clone();
     second.filename = "other.safetensors".into();
     local.models.push(second);
@@ -161,7 +335,7 @@ fn a_licence_shared_by_two_files_is_asked_once() {
 #[test]
 fn not_enough_graphics_memory_or_disk_blocks() {
     let mut f = feature("select-subject");
-    f.local.as_mut().unwrap().min_vram_mb = Some(12_000);
+    f.locals[0].min_vram_mb = Some(12_000);
     let mut inv = have_sam3();
     inv.files.clear();
     inv.vram_mb = Some(8_000);
@@ -181,7 +355,7 @@ fn not_enough_graphics_memory_or_disk_blocks() {
 #[test]
 fn unknown_hardware_does_not_block() {
     let mut f = feature("select-subject");
-    f.local.as_mut().unwrap().min_vram_mb = Some(12_000);
+    f.locals[0].min_vram_mb = Some(12_000);
     let mut inv = bare();
     inv.vram_mb = None;
     inv.free_disk_bytes = None;
@@ -258,6 +432,127 @@ fn each_photocraft_tool_has_one_shared_tool_with_the_right_job_and_inputs() {
 fn a_tool_without_a_checked_route_offers_none() {
     // Remove background has no verified local recipe and no hosted adapter that matts an image.
     let f = feature("remove-background");
-    assert!(f.local.is_none());
+    assert!(f.locals.is_empty());
     assert!(f.cloud.is_empty());
+}
+
+#[test]
+fn sam21_discloses_every_part_of_its_workflow_without_gating_it() {
+    let features = builtin();
+    let select = features
+        .iter()
+        .find(|f| f.id == "select-subject")
+        .expect("select-subject");
+    let sam21 = select
+        .locals
+        .iter()
+        .find(|r| r.workflow == "sam21-segment")
+        .expect("sam21");
+    let labels: Vec<_> = sam21.components.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "SAM 2.1 checkpoint",
+            "ComfyUI segment anything 2 add-on",
+            "ComfyUI Florence 2 add-on",
+            "Florence-2-large detector"
+        ]
+    );
+    for component in &sam21.components {
+        let url = component.licence.url.as_deref().unwrap_or_default();
+        assert!(
+            url.starts_with("https://"),
+            "{} needs a source link",
+            component.label
+        );
+        assert!(
+            !component.licence.accept_required,
+            "{} is disclosure only",
+            component.label
+        );
+    }
+    let detector = sam21.components.last().expect("detector");
+    assert!(
+        detector.licence.name.starts_with("MIT"),
+        "the managed detector is MIT"
+    );
+    let add_on = &sam21.components[1];
+    let note = add_on.licence.note.as_deref().unwrap_or_default();
+    assert!(
+        note.contains("downloads it from Hugging Face by itself"),
+        "the add-on's own download must be disclosed"
+    );
+    // The detector the graph asks for is the one the catalogue installs, file by file.
+    let detector_files: Vec<_> = sam21.models.iter().filter(|m| m.folder == "LLM").collect();
+    assert_eq!(detector_files.len(), 10);
+    assert!(
+        detector_files
+            .iter()
+            .all(|m| m.filename.starts_with(&format!("{FLORENCE2_LARGE_DIR}/")))
+    );
+    assert!(
+        detector_files
+            .iter()
+            .all(|m| m.licence.name == "MIT" && !m.licence.accept_required)
+    );
+    assert!(detector_files.iter().all(|m| matches!(&m.source, Source::HuggingFace { repo, revision: Some(rev), .. } if repo == "microsoft/Florence-2-large" && rev.len() == 40)));
+    assert_eq!(
+        sam21.models[0].filename, "sam2.1_hiera_large-fp16.safetensors",
+        "the checkpoint stays first"
+    );
+    // The models with no disclosure work yet stay empty rather than implying a clean bill.
+    let sam1 = select
+        .locals
+        .iter()
+        .find(|r| r.workflow == "sam1-segment")
+        .expect("sam1");
+    assert!(sam1.components.is_empty());
+}
+
+#[test]
+fn sam21_is_ready_only_with_the_checkpoint_and_every_detector_file() {
+    let select = feature("select-subject");
+    let sam21 = select
+        .locals
+        .iter()
+        .find(|r| r.workflow == "sam21-segment")
+        .unwrap();
+    let mut inventory = Inventory {
+        comfyui_found: true,
+        files: sam21
+            .models
+            .iter()
+            .map(|m| InstalledFile {
+                folder: m.folder.clone(),
+                filename: m.filename.clone(),
+                size_bytes: m.size_bytes,
+            })
+            .collect(),
+        node_folders: vec![
+            "comfyui-segment-anything-2".into(),
+            "comfyui-florence2".into(),
+        ],
+        ..Inventory::default()
+    };
+    let ready = plans(&select, &inventory)
+        .into_iter()
+        .find(|p| p.recipe == "sam21-segment")
+        .unwrap();
+    assert_eq!(ready.state, State::Ready);
+    // A Florence variant kept elsewhere (the Flux fine-tune, say) must not count as the detector.
+    inventory
+        .files
+        .retain(|f| f.filename != "Florence-2-large/model.safetensors");
+    inventory.files.push(InstalledFile {
+        folder: "LLM".into(),
+        filename: "Florence-2-Flux-Large/model.safetensors".into(),
+        size_bytes: 1_553_563_458,
+    });
+    let missing = plans(&select, &inventory)
+        .into_iter()
+        .find(|p| p.recipe == "sam21-segment")
+        .unwrap();
+    assert_eq!(missing.state, State::NeedsInstall);
+    assert_eq!(missing.missing_files.len(), 1);
+    assert_eq!(missing.download_bytes, 1_553_563_458);
 }

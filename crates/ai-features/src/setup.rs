@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::engine::{GpuVendor, Os, SystemProfile, gpu_route};
 use crate::feature::Feature;
-use crate::plan::{Inventory, plan};
+use crate::plan::{Inventory, plan, plan_native};
 use crate::recipe::Licence;
 
 /// The ComfyUI release the portable builds are pinned to.
@@ -200,6 +200,22 @@ fn is_old_nvidia(name: &str) -> bool {
     .any(|old| lower.contains(old))
 }
 
+/// An install offer for the built-in runner explicitly selected by the person.
+pub fn setup_offer_native(
+    feature: &Feature,
+    provider: &str,
+    profile: &SystemProfile,
+    inventory: &Inventory,
+) -> Option<SetupOffer> {
+    offer_for(
+        feature,
+        profile,
+        inventory,
+        SetupRoute::BuiltIn,
+        Some(provider),
+    )
+}
+
 /// What one Install click would do for `feature` on this computer, or `None` when the feature has
 /// no local recipe or everything it needs is already here.
 pub fn setup_offer(
@@ -208,7 +224,24 @@ pub fn setup_offer(
     inventory: &Inventory,
     route: SetupRoute,
 ) -> Option<SetupOffer> {
-    let recipe = feature.local.as_ref().filter(|r| r.usable)?;
+    offer_for(feature, profile, inventory, route, None)
+}
+
+fn offer_for(
+    feature: &Feature,
+    profile: &SystemProfile,
+    inventory: &Inventory,
+    route: SetupRoute,
+    selected_provider: Option<&str>,
+) -> Option<SetupOffer> {
+    let recipe = feature.locals.first().filter(|r| r.usable)?;
+    let native = if route == SetupRoute::BuiltIn {
+        Some(recipe.native.iter().find(|n| {
+            !n.models.is_empty() && selected_provider.is_none_or(|provider| n.provider == provider)
+        })?)
+    } else {
+        None
+    };
     let mut steps = Vec::new();
     let mut portable = None;
     let mut manual_steps = Vec::new();
@@ -229,12 +262,17 @@ pub fn setup_offer(
             None => manual_steps = manual_install_steps(),
         }
     }
-    // Compare against a computer that has ComfyUI, so the rest of the list is the same either way.
-    let comfy_view = Inventory {
-        comfyui_found: true,
-        ..inventory.clone()
+    // ComfyUI and the built-in runner need different checkpoint layouts. The latter does not
+    // require ComfyUI, its node packs or its graphics-memory estimate.
+    let compared = if let Some(native) = native {
+        plan_native(feature, &native.provider, inventory)
+    } else {
+        let comfy_view = Inventory {
+            comfyui_found: true,
+            ..inventory.clone()
+        };
+        plan(feature, &comfy_view)
     };
-    let compared = plan(feature, &comfy_view);
     if route == SetupRoute::ComfyUi && !compared.missing_packs.is_empty() {
         steps.push(SetupStep {
             kind: StepKind::Tools,

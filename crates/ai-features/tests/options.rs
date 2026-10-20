@@ -5,12 +5,19 @@ use craft_ai_features::{Route, builtin, setup_options};
 fn options_are_derived_from_the_features_not_written_twice() {
     let features = builtin();
     let options = setup_options(&features);
-    // One local model (SAM 3), then hosted services.
-    assert!(matches!(&options[0].route, Route::Local { feature } if feature == "select-subject"));
+    // The local models come first, then hosted services.
+    assert!(
+        matches!(&options[0].route, Route::Local { feature, recipe } if feature == "select-subject" && recipe == "sam3-segment")
+    );
     assert_eq!(options[0].title, "SAM 3");
     assert_eq!(options[0].unlocks, ["select-subject"]);
     assert!(options[0].usable, "PhotoCraft runs SAM 3 today");
-    assert!(options.iter().skip(1).all(|o| o.usable));
+    assert!(
+        options
+            .iter()
+            .filter(|o| matches!(o.route, Route::Service { .. }))
+            .all(|o| o.usable)
+    );
     // Ids are unique.
     let mut ids: Vec<_> = options.iter().map(|o| o.id.clone()).collect();
     ids.sort();
@@ -89,7 +96,7 @@ fn a_local_model_says_how_much_it_downloads_and_a_hosted_service_downloads_nothi
     let options = setup_options(&builtin());
     let sam3 = options
         .iter()
-        .find(|o| o.id == "local:select-subject")
+        .find(|o| o.id == "local:select-subject:sam3-segment")
         .unwrap();
     assert_eq!(sam3.size_bytes, Some(3_449_860_632));
     for service in options
@@ -98,4 +105,28 @@ fn a_local_model_says_how_much_it_downloads_and_a_hosted_service_downloads_nothi
     {
         assert_eq!(service.size_bytes, None, "{}", service.id);
     }
+}
+
+#[test]
+fn every_local_recipe_is_its_own_setup_option() {
+    let options = setup_options(&builtin());
+    let sam21 = options
+        .iter()
+        .find(|o| o.id == "local:select-subject:sam21-segment")
+        .unwrap();
+    assert_eq!(sam21.title, "SAM 2.1");
+    assert_eq!(sam21.size_bytes, Some(448_999_828 + 1_556_213_789));
+    assert!(matches!(
+        &sam21.route,
+        Route::Local { feature, recipe } if feature == "select-subject" && recipe == "sam21-segment"
+    ));
+    let sam1 = options
+        .iter()
+        .find(|o| o.id == "local:select-subject:sam1-segment")
+        .unwrap();
+    assert_eq!(sam1.title, "SAM 1");
+    assert_eq!(
+        sam1.size_bytes,
+        Some(375_042_383 + 693_997_677 + 1_006 + 440_449_768 + 570 + 231_508 + 466_062 + 48)
+    );
 }

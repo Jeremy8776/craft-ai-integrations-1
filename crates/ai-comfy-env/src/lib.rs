@@ -21,7 +21,7 @@ pub mod system;
 mod verify;
 
 pub use detect::{ComfyInstall, parse_extra_paths};
-pub use download::{DownloadConfig, Downloader, Phase, Progress};
+pub use download::{DownloadConfig, Downloader, Phase, Progress, safe_relative};
 pub use extra_paths::render_extra_paths;
 pub use hardware::{free_disk_bytes, parse_nvidia_smi, vram_mb};
 pub use model_folder_scan::{

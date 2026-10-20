@@ -23,6 +23,12 @@ pub struct FolderDesk {
     shared: SharedStore,
 }
 
+pub use native::{NativeFiles, NativeInstall};
+
+mod native;
+mod setup;
+pub use setup::{CheckedNative, NativeSetupPlan};
+
 impl FolderDesk {
     pub fn new(shared: SharedStore) -> Self {
         Self { shared }
@@ -180,8 +186,13 @@ impl FolderDesk {
 fn scan(path: &Path) -> Result<FolderScan, AiError> {
     let owned: Vec<(String, String, u64)> = craft_ai_features::builtin()
         .into_iter()
-        .filter_map(|f| f.local)
-        .flat_map(|recipe| recipe.models)
+        .flat_map(|f| f.locals)
+        .flat_map(|recipe| {
+            recipe
+                .models
+                .into_iter()
+                .chain(recipe.native.into_iter().flat_map(|route| route.models))
+        })
         .map(|m| (m.folder, m.filename, m.size_bytes))
         .collect();
     let known: Vec<KnownFile<'_>> = owned

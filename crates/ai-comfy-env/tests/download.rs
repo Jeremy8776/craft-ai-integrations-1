@@ -404,8 +404,14 @@ fn file_names_that_could_escape_the_folder_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     for name in [
         "../evil.safetensors",
-        "a/b.safetensors",
         "a\\b.safetensors",
+        "a/../b.safetensors",
+        "a//b.safetensors",
+        "/abs.safetensors",
+        "a/b/c/d.safetensors",
+        "a/.hidden",
+        "a/b.",
+        "a/b:c",
         ".hidden",
         "",
         "C:x",
@@ -424,6 +430,28 @@ fn file_names_that_could_escape_the_folder_are_refused() {
         assert_eq!(err.kind, ErrorKind::InvalidRequest, "{name}");
     }
     assert!(names(dir.path()).is_empty());
+}
+
+#[test]
+fn a_bundle_file_lands_in_its_own_sub_folder_with_no_stray_part_file() {
+    let data = body();
+    let server = range_server(data.clone(), true);
+    let dir = tempfile::tempdir().unwrap();
+    let mut file = model(&data, &format!("{}/m", origin(&server)));
+    file.filename = "Bundle/m.safetensors".into();
+    let path = run(
+        &downloader(),
+        &file,
+        dir.path(),
+        None,
+        &AtomicBool::new(false),
+    )
+    .0
+    .unwrap();
+    assert_eq!(path, dir.path().join("Bundle").join("m.safetensors"));
+    assert_eq!(std::fs::read(&path).unwrap(), data);
+    assert_eq!(names(dir.path()), ["Bundle"]);
+    assert_eq!(names(&dir.path().join("Bundle")), ["m.safetensors"]);
 }
 
 #[test]
@@ -583,4 +611,33 @@ fn a_source_that_redirects_forever_is_given_up_on() {
         6,
         "the first request and five redirects, no more"
     );
+}
+
+/// Opt-in: fetches the catalogue's Florence-2-large detector into a real ComfyUI folder through
+/// the same downloader the launcher uses. Needs `CRAFT_TEST_COMFY_BASE` and downloads 1.56 GB.
+#[test]
+#[ignore = "downloads 1.56 GB into a real ComfyUI folder after the owner's approval"]
+fn live_florence_detector_installs_from_the_catalogue_with_every_hash_checked() {
+    let base =
+        std::path::PathBuf::from(std::env::var("CRAFT_TEST_COMFY_BASE").expect("ComfyUI folder"));
+    let install = craft_ai_comfy_env::ComfyInstall::at(&base).expect("a ComfyUI folder");
+    let features = craft_ai_features::builtin();
+    let recipe = features
+        .iter()
+        .flat_map(|f| &f.locals)
+        .find(|r| r.workflow == "sam21-segment")
+        .expect("sam21 recipe");
+    let dest = install.models_dir_for("LLM").expect("LLM folder");
+    let downloader = Downloader::new(DownloadConfig::default());
+    let cancel = AtomicBool::new(false);
+    let mut fetched = 0;
+    for file in recipe.models.iter().filter(|m| m.folder == "LLM") {
+        let path = downloader
+            .fetch(file, &dest, None, &cancel, &mut |_| {})
+            .expect("download");
+        verify_file(&path, file, &cancel, &mut |_| {}).expect("sha256 matches the catalogue");
+        eprintln!("ok {} {}", file.filename, file.size_bytes);
+        fetched += 1;
+    }
+    assert_eq!(fetched, 10);
 }

@@ -160,13 +160,34 @@ fn a_tool_with_no_model_gets_the_reason_and_the_real_ways_to_set_it_up() {
         "{}",
         popup.reason
     );
-    // The local model, with its size, is offered as a greyed way to set the tool up.
-    let sam3 = &popup.picker.groups[0];
+    // The local models, with their sizes, are offered as greyed ways to set the tool up.
+    let sam3 = popup
+        .picker
+        .groups
+        .iter()
+        .find(|group| {
+            matches!(&group.setup,
+        Some(craft_ai_client::SetupLink::New { option }) if option == "local:select-subject:sam3-segment")
+        })
+        .expect("the ComfyUI setup choice is separate from built-in engines");
     assert_eq!(
         (sam3.title.as_str(), sam3.state),
         ("SAM 3", GroupState::NotSetUp)
     );
     assert_eq!(sam3.size_bytes, Some(3_449_860_632));
+    // SAM 2.1 has a verified PhotoCraft subject path. The other older recipes stay unavailable.
+    let offered: Vec<&str> = popup
+        .picker
+        .groups
+        .iter()
+        .filter_map(|group| match &group.setup {
+            Some(craft_ai_client::SetupLink::New { option }) => Some(option.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(offered.contains(&"local:select-subject:sam21-segment"));
+    assert!(!offered.contains(&"local:select-subject:sam2-segment"));
+    assert!(!offered.contains(&"local:select-subject:sam1-segment"));
 }
 
 #[test]

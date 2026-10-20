@@ -55,12 +55,21 @@ mod picker_groups;
 mod picker_presets;
 mod popup;
 mod runner;
+mod setup_flow;
+pub use setup_flow::{SetupRequest, SetupSession, SetupTask, SetupTicket};
 mod tools;
 
 pub use client::{AiClient, Choice, Finished, Job, PickedChoice, Plan, RoleReady, RoleStatus};
+/// File transfer and progress controls without a host depending on a particular local server.
+pub use craft_ai_comfy_env::{
+    DownloadConfig as ModelDownloadConfig, Downloader as ModelDownloader, Phase as SetupPhase,
+    Progress as SetupProgress,
+};
 pub use craft_ai_engine::{EngineRegistry, LoadedModel, ModelRunner, RunContext};
 pub use factory::{BuildFn, ProviderFactory};
-pub use folders::{FolderAdded, FolderDesk};
+pub use folders::{
+    CheckedNative, FolderAdded, FolderDesk, NativeFiles, NativeInstall, NativeSetupPlan,
+};
 pub use local::{LocalEnabled, LocalRoute};
 pub use manage::{
     Confirmed, ConnectionManager, ConnectionView, KeyState, MAX_DECLARED, ModelChoice, ProbeReport,

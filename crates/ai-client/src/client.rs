@@ -65,6 +65,8 @@ pub struct RoleReady {
 pub struct Choice {
     pub connection: ConnectionId,
     pub connection_label: String,
+    /// The execution engine or service registered on this connection.
+    pub provider: String,
     pub model: ModelId,
     pub model_label: String,
     pub locality: Locality,
@@ -347,6 +349,7 @@ impl AiClient {
             .map(|r| Choice {
                 connection: r.connection.id.clone(),
                 connection_label: r.connection.label.clone(),
+                provider: r.connection.provider.clone(),
                 model: r.model.id.clone(),
                 model_label: r.model.label.clone(),
                 locality: r.connection.locality,
@@ -382,6 +385,7 @@ impl AiClient {
                 choice: Choice {
                     connection: r.connection.id.clone(),
                     connection_label: r.connection.label.clone(),
+                    provider: r.connection.provider.clone(),
                     model: r.model.id.clone(),
                     model_label: r.model.label.clone(),
                     locality: r.connection.locality,

@@ -259,6 +259,45 @@ impl ToolDesk {
         Ok(())
     }
 
+    /// The named local segmentation model selected for the direct sample.
+    pub fn local_subject_sample(&self, role: &Role, request: Request) -> Result<Option<(String, String)>, AiError> {
+        if role.id.as_str() != "select-subject" { return Ok(None); }
+        let plan = self.client.plan(role, request)?;
+        if plan.connection.provider != "comfyui" || !matches!(plan.model.as_str(), "sam3-segment" | "sam21-segment") {
+            return Ok(None);
+        }
+        if plan.connection.locality != Locality::Local {
+            return Err(AiError::unsupported("Select subject needs a model on this computer"));
+        }
+        let endpoint = plan.connection.endpoint.ok_or_else(|| AiError::invalid("The selected model has no local address"))?;
+        Ok(Some((plan.model.as_str().to_owned(), endpoint)))
+    }
+
+    /// The checked local SAM 3 route used by a host's direct segmentation sample.
+    /// Other choices use the normal provider job path; no key or consent is read here.
+    pub fn local_sam3_sample_endpoint(
+        &self,
+        role: &Role,
+        request: Request,
+    ) -> Result<Option<String>, AiError> {
+        if role.id.as_str() != "select-subject" {
+            return Ok(None);
+        }
+        let plan = self.client.plan(role, request)?;
+        if plan.connection.provider != "comfyui" || plan.model.as_str() != "sam3-segment" {
+            return Ok(None);
+        }
+        if plan.connection.locality != Locality::Local {
+            return Err(AiError::unsupported(
+                "Select subject needs a model on this computer",
+            ));
+        }
+        plan.connection
+            .endpoint
+            .map(Some)
+            .ok_or_else(|| AiError::invalid("The selected model has no local address"))
+    }
+
     /// Plans a sample. A remote destination the person has not agreed to yet comes back as
     /// [`TestStart::NeedsConsent`] with nothing sent; pass `agreed` once they have said yes and
     /// the agreement is recorded for the launcher, like any app's.

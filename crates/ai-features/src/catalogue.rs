@@ -6,7 +6,9 @@
 //! run against its real service.
 
 use crate::feature::{AppStatus, AppUse, Feature};
-use crate::recipe::{CloudOption, Licence, LocalRecipe, ModelFile, NativeRoute, NodePack, Source};
+use crate::recipe::{
+    CloudOption, Component, Licence, LocalRecipe, ModelFile, NativeRoute, NodePack, Source,
+};
 use craft_ai_core::{CapabilityId, InputRole};
 
 fn uses(list: &[(&str, &str)]) -> Vec<AppUse> {
@@ -35,7 +37,7 @@ fn feature(id: &str, title: &str, summary: &str, capability: &str) -> Option<Fea
         capability: CapabilityId::parse(capability).ok()?,
         inputs: Vec::new(),
         uses: Vec::new(),
-        local: None,
+        locals: Vec::new(),
         cloud: Vec::new(),
     })
 }
@@ -137,6 +139,323 @@ fn sam3() -> LocalRecipe {
                 models: Vec::new(),
             },
         ],
+        components: Vec::new(),
+    }
+}
+
+/// Meta's SAM 2 checkpoint in the layout the `ComfyUI-segment-anything-2` node pack reads, at a
+/// pinned revision of a community conversion repo. SAM 2 has no text understanding, so the words
+/// of a prompt are found by Microsoft's Florence-2-large detector, whose files are set up here too.
+fn sam2(label: &str, workflow: &str, filename: &str, size_bytes: u64, sha256: &str) -> LocalRecipe {
+    let mut recipe = LocalRecipe {
+        label: label.to_owned(),
+        // No adapter runs these generations yet: flip when the app route executes them.
+        usable: false,
+        workflow: workflow.to_owned(),
+        models: vec![ModelFile {
+            folder: "sam2".to_owned(),
+            filename: filename.to_owned(),
+            size_bytes,
+            sha256: sha256.to_owned(),
+            source: Source::HuggingFace {
+                repo: "Kijai/sam2-safetensors".to_owned(),
+                file: filename.to_owned(),
+                revision: Some("f885607d88bb3f9145efa49c3e3c50a9e5bf13eb".to_owned()),
+            },
+            licence: Licence {
+                name: "Apache-2.0, community conversion".to_owned(),
+                url: Some("https://github.com/facebookresearch/sam2".to_owned()),
+                accept_required: false,
+                note: Some(
+                    "This file is a community conversion of Meta's SAM 2 weights, which Meta releases under Apache 2.0."
+                        .to_owned(),
+                ),
+            },
+        }],
+        packs: vec![
+            NodePack {
+                label: "ComfyUI segment anything 2".to_owned(),
+                repo_url: "https://github.com/kijai/ComfyUI-segment-anything-2".to_owned(),
+                folder_names: vec!["comfyui-segment-anything-2".to_owned()],
+            },
+            NodePack {
+                label: "ComfyUI Florence 2".to_owned(),
+                repo_url: "https://github.com/kijai/ComfyUI-Florence2".to_owned(),
+                folder_names: vec!["comfyui-florence2".to_owned()],
+            },
+        ],
+        min_vram_mb: None,
+        native: Vec::new(),
+        components: Vec::new(),
+    };
+    recipe.models.extend(florence2_large_files());
+    recipe
+}
+
+/// Microsoft's Florence-2-large, the detector that turns the words of a prompt into boxes for SAM 2
+/// and SAM 2.1. It is MIT licensed, and every file is pinned to one revision and checked by
+/// SHA-256. ComfyUI's Florence 2 add-on lists the folders of `models/LLM`, so the files sit in
+/// `LLM/Florence-2-large/`.
+fn florence2_large_files() -> Vec<ModelFile> {
+    const REVISION: &str = "21a599d414c4d928c9032694c424fb94458e3594";
+    let file = |leaf: &str, size_bytes: u64, sha256: &str| {
+        ModelFile {
+        folder: "LLM".to_owned(),
+        filename: format!("{FLORENCE2_LARGE_DIR}/{leaf}"),
+        size_bytes,
+        sha256: sha256.to_owned(),
+        source: Source::HuggingFace {
+            repo: "microsoft/Florence-2-large".to_owned(),
+            file: leaf.to_owned(),
+            revision: Some(REVISION.to_owned()),
+        },
+        licence: Licence {
+            name: "MIT".to_owned(),
+            url: Some(format!(
+                "https://huggingface.co/microsoft/Florence-2-large/blob/{REVISION}/LICENSE"
+            )),
+            accept_required: false,
+            note: Some(
+                "Published by Microsoft. The folder also holds Python files that ComfyUI's Florence 2 add-on loads and runs; they are pinned to one revision and checked against SHA-256."
+                    .to_owned(),
+            ),
+        },
+    }
+    };
+    vec![
+        file(
+            "model.safetensors",
+            1_553_563_458,
+            "4f38ce741c6b71188fe2b3419a55e11917a8a7b321ae2e63c61da0191b0ebad7",
+        ),
+        file(
+            "config.json",
+            2_445,
+            "6f8a8f92a74ce18b5c1e5646b4a8222477dd1ac49f31b953e75d6fc3e0f8583a",
+        ),
+        file(
+            "configuration_florence2.py",
+            15_119,
+            "de2e45a975b3582de05d2f4d963a3e9f9a3d20dccf78d28e0052932a0be93bdf",
+        ),
+        file(
+            "generation_config.json",
+            51,
+            "30e9865458ecc8ee931eeeb43f44f1d169c5ab95be39e0072142a7a6b8f31990",
+        ),
+        file(
+            "modeling_florence2.py",
+            127_455,
+            "5162bf465e61b6e29cc113a467630ec3cb56ed8e4d46eb6207157f10fb9b8a24",
+        ),
+        file(
+            "preprocessor_config.json",
+            806,
+            "2f5921bbc53c7cc04251e1027b45b1cec726276be6db23d1bb40641bfbe2cf29",
+        ),
+        file(
+            "processing_florence2.py",
+            48_674,
+            "c655782a9e4347965c735ea54cbc4e98fdbc02155ffd1ce2ecd61f42c45eda28",
+        ),
+        file(
+            "tokenizer.json",
+            1_355_863,
+            "847bbeab6174d66a88898f729d52fa8d355fafe1bea101cf960dd404581df70e",
+        ),
+        file(
+            "tokenizer_config.json",
+            34,
+            "79ffcf43af8ebda99d165f61d243180da2e2639952e41e71e11611c18770489c",
+        ),
+        file(
+            "vocab.json",
+            1_099_884,
+            "394fdc63c71aabe0a9b97117f5d62fb5fcc4d59b2b3ea929a3929e6a53217b3c",
+        ),
+    ]
+}
+
+/// The folder name ComfyUI's Florence 2 add-on shows for the detector, and the graph asks for.
+pub const FLORENCE2_LARGE_DIR: &str = "Florence-2-large";
+
+fn sam21() -> LocalRecipe {
+    // The node pack loads SAM 2.1 at half precision by default, which reads the `-fp16` file.
+    let mut recipe = sam2(
+        "SAM 2.1",
+        "sam21-segment",
+        "sam2.1_hiera_large-fp16.safetensors",
+        448_999_828,
+        "278af5296fcc153aa94645a4981e93fe8b7a936a9fa27dbd71e8c850df6d7038",
+    );
+    // PhotoCraft now runs this selected text-grounded subject path.
+    recipe.usable = true;
+    recipe.components = sam21_components();
+    recipe
+}
+
+/// What the SAM 2.1 text-grounded path runs besides its checkpoint, with each publisher's own
+/// statement as read on 20/10/2026. Disclosure only: see [`Component`].
+fn sam21_components() -> Vec<Component> {
+    let declared = |name: &str, url: &str, note: Option<&str>| Licence {
+        name: name.to_owned(),
+        url: Some(url.to_owned()),
+        accept_required: false,
+        note: note.map(str::to_owned),
+    };
+    vec![
+        Component {
+            label: "SAM 2.1 checkpoint".to_owned(),
+            role: "Cuts the subject out".to_owned(),
+            licence: declared(
+                "Apache-2.0, as declared by Meta and by the conversion's publisher",
+                "https://github.com/facebookresearch/sam2/blob/main/LICENSE",
+                None,
+            ),
+        },
+        Component {
+            label: "ComfyUI segment anything 2 add-on".to_owned(),
+            role: "Runs SAM 2.1 inside ComfyUI".to_owned(),
+            licence: declared(
+                "Apache-2.0, as declared by its publisher",
+                "https://github.com/kijai/ComfyUI-segment-anything-2/blob/main/LICENSE",
+                Some(
+                    "If the checkpoint file is missing, this add-on downloads it from Hugging Face by itself. ArtCraft checks the file before it lets a Craft app use the model.",
+                ),
+            ),
+        },
+        Component {
+            label: "ComfyUI Florence 2 add-on".to_owned(),
+            role: "Runs the detector inside ComfyUI".to_owned(),
+            licence: declared(
+                "MIT, as declared by its publisher",
+                "https://github.com/kijai/ComfyUI-Florence2/blob/main/LICENSE",
+                None,
+            ),
+        },
+        Component {
+            label: "Florence-2-large detector".to_owned(),
+            role: "Finds the words you type in the picture".to_owned(),
+            licence: declared(
+                "MIT, as declared by Microsoft",
+                "https://huggingface.co/microsoft/Florence-2-large/blob/main/LICENSE",
+                Some(
+                    "ArtCraft sets this one up. You can run another Florence-2 variant in ComfyUI yourself; its terms are its publisher's, and this list does not cover it.",
+                ),
+            ),
+        },
+    ]
+}
+
+fn sam20() -> LocalRecipe {
+    sam2(
+        "SAM 2",
+        "sam2-segment",
+        "sam2_hiera_large.safetensors",
+        897_827_480,
+        "ad781e6f18af5d7523075642f5da2d2b874cec6b16cebfd4f6ea1c6a289d9605",
+    )
+}
+
+/// Meta's original SAM checkpoint plus the GroundingDINO text detector that turns words into
+/// boxes for it, and the language model files that detector reads. All three sit in ComfyUI
+/// model folders the `comfyui_segment_anything` node pack scans.
+fn sam1() -> LocalRecipe {
+    const DINO_REVISION: &str = "a94c9b567a2a374598f05c584e96798a170c56fb";
+    const BERT_REVISION: &str = "86b5e0934494bd15c9632b12f734a8a67f723594";
+    let apache = |note: &str| Licence {
+        name: "Apache-2.0".to_owned(),
+        url: Some("https://www.apache.org/licenses/LICENSE-2.0".to_owned()),
+        accept_required: false,
+        note: Some(note.to_owned()),
+    };
+    let dino_file = |filename: &str, size_bytes: u64, sha256: &str| ModelFile {
+        folder: "grounding-dino".to_owned(),
+        filename: filename.to_owned(),
+        size_bytes,
+        sha256: sha256.to_owned(),
+        source: Source::HuggingFace {
+            repo: "ShilongLiu/GroundingDINO".to_owned(),
+            file: filename.to_owned(),
+            revision: Some(DINO_REVISION.to_owned()),
+        },
+        licence: apache("GroundingDINO is released by its authors under Apache 2.0."),
+    };
+    let bert_file = |filename: &str, size_bytes: u64, sha256: &str| ModelFile {
+        folder: "bert-base-uncased".to_owned(),
+        filename: filename.to_owned(),
+        size_bytes,
+        sha256: sha256.to_owned(),
+        source: Source::HuggingFace {
+            repo: "google-bert/bert-base-uncased".to_owned(),
+            file: filename.to_owned(),
+            revision: Some(BERT_REVISION.to_owned()),
+        },
+        licence: apache("The BERT language model files are released by Google under Apache 2.0."),
+    };
+    LocalRecipe {
+        label: "SAM 1".to_owned(),
+        usable: false,
+        workflow: "sam1-segment".to_owned(),
+        models: vec![
+            ModelFile {
+                folder: "sams".to_owned(),
+                filename: "sam_vit_b_01ec64.pth".to_owned(),
+                size_bytes: 375_042_383,
+                sha256: "ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912"
+                    .to_owned(),
+                source: Source::Url {
+                    url: "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"
+                        .to_owned(),
+                },
+                licence: apache(
+                    "Meta's original SAM checkpoint, served from Meta's own file server.",
+                ),
+            },
+            dino_file(
+                "groundingdino_swint_ogc.pth",
+                693_997_677,
+                "3b3ca2563c77c69f651d7bd133e97139c186df06231157a64c507099c52bc799",
+            ),
+            dino_file(
+                "GroundingDINO_SwinT_OGC.cfg.py",
+                1_006,
+                "172e80017f9395668a9cb5d1b8bd9d061c0e360471c6ed673c83b69bb14399f1",
+            ),
+            bert_file(
+                "model.safetensors",
+                440_449_768,
+                "68d45e234eb4a928074dfd868cead0219ab85354cc53d20e772753c6bb9169d3",
+            ),
+            bert_file(
+                "config.json",
+                570,
+                "7160e1553ad2ca51d8c1cb066be533db31826e12d173824c1bb0cb1a4f187d20",
+            ),
+            bert_file(
+                "vocab.txt",
+                231_508,
+                "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+            ),
+            bert_file(
+                "tokenizer.json",
+                466_062,
+                "ce64fce797c24f68df90b40a3f74f579b336a493db14bd583fd520ea0d8c9a98",
+            ),
+            bert_file(
+                "tokenizer_config.json",
+                48,
+                "a025160ef0431f1a392f6f050c1310f4c5d9fb6f275932dbccba73c4d214bf10",
+            ),
+        ],
+        packs: vec![NodePack {
+            label: "ComfyUI segment anything".to_owned(),
+            repo_url: "https://github.com/storyicon/comfyui_segment_anything".to_owned(),
+            folder_names: vec!["comfyui_segment_anything".to_owned()],
+        }],
+        min_vram_mb: None,
+        native: Vec::new(),
+        components: Vec::new(),
     }
 }
 
@@ -159,7 +478,7 @@ fn try_builtin() -> Option<Vec<Feature>> {
         ("EffectCraft", "Roto and matte"),
     ]);
     select.inputs = vec![InputRole::Source, InputRole::Prompt];
-    select.local = Some(sam3());
+    select.locals = vec![sam3(), sam21(), sam20(), sam1()];
 
     let mut background = feature(
         "remove-background",

@@ -109,6 +109,7 @@ mod tests {
             choice: Choice {
                 connection: ConnectionId::new("c").unwrap(),
                 connection_label: "C".into(),
+                provider: "openai".into(),
                 model: ModelId::new("m").unwrap(),
                 model_label: "M".into(),
                 locality: Locality::Remote,

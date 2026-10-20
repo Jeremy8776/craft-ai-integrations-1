@@ -3,7 +3,27 @@
 Three levels, kept apart on purpose. A saved key, a static catalogue, a passing scripted test and a live
 job prove different things.
 
-## Built and tested against scripted servers only
+## Local setup checkpoint, 18/10/2026
+
+This worktree has uncommitted contract alignment, separate native discovery/download checks,
+immutable `NativeSetupPlan` snapshots, `SetupSession` with owned cancellation and ticketed
+progress/results, a neutral `native_model_setup` widget and a duration-aware consent prompt.
+They are not mounted in a launcher or app build. Checking files is not successful inference.
+
+The latest source-state gate passed: `ns` caught 15/15 deliberate mutations and `ca --dry` found
+ten unique anchors. Formatting, all-target Clippy with warnings denied, affected tests for
+`craft-ai-core`, `craft-ai-comfy-env`, `craft-ai-client`, `craft-ai-features` and `craft-ai-egui`,
+and core/features wasm checks passed. This is local evidence for the dirty worktree, not the
+published PR head. Real setup-to-durable-app-output proof, host integration, the capability-first
+overview, sandbox access and upstream dependency pinning remain open.
+
+The local runtime now also has directly verified SAM 1 and generalized SAM 2 session paths in `craft-ai-comfyui`. On 19/10/2026, after explicit approval, the seven missing SAM 1 recipe files were downloaded into the existing ComfyUI model folders; the pre-existing SAM ViT-B checkpoint and seven new files all matched the declared sizes and SHA-256 hashes. The Apache-2.0 segment-anything node pack was already installed and exposed the required classes, registered with display-suffixed identifiers. The session now uses those exact identifiers. The package test suite passed, and its opt-in SAM 1 live test returned a nonempty 256x256 mask from a generated red-square image against ComfyUI 0.22.3; queue idle before and after. Generalized SAM 2 live inference also passed. These are standalone local runtime results, not PhotoCraft adoption or durable document output. Keep `sam1-segment`, `sam2-segment` and `sam21-segment` unavailable to apps until each consuming app route and durable output pass.
+
+The private project handoff's `NEXT.md` records the working state and next ownership boundary.
+Real setup-to-durable-app-output proof, host integration, sandbox access and upstream dependency
+pinning remain open.
+
+## Scripted and headless coverage
 
 No real hosted service, download host or repository was contacted by these tests.
 
@@ -19,25 +39,24 @@ No real hosted service, download host or repository was contacted by these tests
 | Built-in engines | `craft-ai-engine`, `craft-ai-engine-candle` | Contract, registry and provider are tested with a fake runner and the shared conformance suite. SAM 3 on Candle (point and text prompts, processor, or Metal on macOS) ran on a real photograph and passes the same suite on Meta's checkpoint; the live tests skip without `CRAFT_SAM3_WEIGHTS`. It reads the Hugging Face checkpoint layout with tokenizer files, not the ComfyUI file. Pictures go in as PNG or JPEG (a JPEG's EXIF turn is applied). No Nvidia (CUDA) build, no Burn runtime, and the launcher does not download the checkpoint yet. |
 | Declarative adapter | `craft-ai-declarative` | Request/response and queue flows from a data file; prompt-only inputs. No launcher screen to add a spec yet. |
 | Custom connections, model sources, node packs | `craft-ai-core`, `craft-ai-comfy-env` | See `docs/custom-connections-and-sources.md`. Own-host tokens only, no key sent across a redirect, pickle formats need consent, unverified checksums are flagged. |
-| Model folders | `craft-ai-core`, `craft-ai-comfy-env`, `craft-ai-client` | A person's own folders of model files, kept as a map (which sub-folders hold which kind) in the shared store, never moved, renamed or deleted. Scanned read only with limits (depth, files, entries, header size), one default for downloads, folders linked from ComfyUI are read only, and the map can be written as a ComfyUI extra-paths file. Not wired yet: downloads and the installed-files scan still use ComfyUI's own folders, and no launcher screen is merged. |
-| Consent, history, shared store, key handling | `craft-ai-core`, `craft-ai-native`, `craft-ai-client` | Consent is scoped to app, connection, destination and capability, per kind of data, and may expire. `craft-ai-egui`'s prompt does not offer the consent terms yet. |
+| Model folders | `craft-ai-core`, `craft-ai-comfy-env`, `craft-ai-client` | A person's own folders of model files, kept as a map (which sub-folders hold which kind) in the shared store, never moved, renamed or deleted. Scanned read only with limits (depth, files, entries, header size), one default for downloads, folders linked from ComfyUI are read only, and the map can be written as a ComfyUI extra-paths file. Built-in setup in this worktree now uses the shared folder map and a frozen destination. Launcher/ComfyUI host wiring and a merged launcher screen remain separate. |
+| Consent, history, shared store, key handling | `craft-ai-core`, `craft-ai-native`, `craft-ai-client` | Consent is scoped to app, connection, destination and capability, per kind of data, and may expire. The local duration-aware `craft-ai-egui` prompt now offers the shared terms; existing hosts must adopt it explicitly. |
 
 ## Run for real
 
-Only the local SAM 3 clients (`Sam3Point`, `Sam3Session`): point, box, text, candidate masks, grounding
+Prior live evidence includes the local SAM 3 clients (`Sam3Point`, `Sam3Session`): point, box, text, candidate masks, grounding
 instances and prepared hover sessions, through a headless ComfyUI on one Windows machine. The live-test
 evidence is not kept in this repository. This does not make the generic ComfyUI image or video workflows
 live-tested.
 
 ## Not verified
 
-- Any real hosted provider, in any adapter.
+- Successful real hosted text/image output through the new setup flow. Earlier OpenAI smoke read the OS keychain, probed models and received a no-credit response; that is not successful generation.
 - TLS against an intercepting proxy or antivirus HTTPS scanner. `craft-ai-http` trusts the platform's
   certificate store, so such software can read traffic, API keys included, and there is no switch back
   to bundled roots.
-- macOS (CI runs the tests on Linux and Windows), and the macOS and Linux keychains. The real keychain
-  test is `#[ignore]`d.
-- Model download from Hugging Face and automatic node-pack installation against the real services.
+- Live inference and keychain behaviour on macOS and Linux. Published CI now tests Linux, Windows and macOS, but compilation/scripted tests do not prove these live paths. The automated real-keychain test remains ignored.
+- SAM 1's seven missing recipe files were downloaded directly from the pinned Hugging Face/Meta sources and verified against the recipe's exact size and SHA-256 declarations. Automatic model download through the install workflow and automatic node-pack installation against real services remain unverified.
 - The built-in recommended-models catalogue (`catalog.json`) is empty. Which models to recommend per tool
   is a curation decision, so "Recommended" never appears until someone makes it.
 - App adoption. PhotoCraft's dev build uses the SAM 3 clients directly, not the shared role, connection
@@ -54,7 +73,7 @@ live-tested.
   between apps and the adapters has been suggested by the maintainers and is a separate discussion; no
   wire format is defined.
 - A registered tool is a declaration, not installed code. No dynamic adapter registry for arbitrary user
-  code, no general tool executor and no automatic model installation.
+  code, no general tool executor and no implicit adapter/model installation merely from declaring a tool.
 - Interactive negative boxes are ignored, grounding exemplar boxes are not strict regions, hover JPEGs
   are not exact masks, candidate order is not a semantic label, and refinement is not guaranteed to
   improve quality. Runtime catalogue entries stay executable-only.

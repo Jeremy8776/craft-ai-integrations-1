@@ -56,8 +56,8 @@ impl World {
 fn the_catalogue_lists_candle_then_burn_for_select_subject() {
     let f = feature();
     let providers: Vec<&str> = f
-        .local
-        .as_ref()
+        .locals
+        .first()
         .unwrap()
         .native
         .iter()

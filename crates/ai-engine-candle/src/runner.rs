@@ -263,7 +263,7 @@ mod tests {
         let route = craft_ai_features::builtin()
             .into_iter()
             .find(|f| f.id == "select-subject")
-            .and_then(|f| f.local)
+            .and_then(|f| f.locals.into_iter().next())
             .and_then(|l| l.native.into_iter().find(|n| n.provider == "candle"))
             .unwrap();
         let runner = Sam3Runner;

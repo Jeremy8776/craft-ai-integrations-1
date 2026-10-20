@@ -20,9 +20,13 @@ pub struct ComfyInstall {
 }
 
 impl ComfyInstall {
-    /// The ComfyUI Desktop install recorded for this user, if any.
+    /// The ComfyUI Desktop install recorded for this user.
     pub fn discover() -> Option<Self> {
-        Self::discover_in(&dirs::config_dir()?.join("ComfyUI"))
+        let config = config_location(
+            std::env::var_os("CRAFT_AI_COMFY_CONFIG_DIR").map(PathBuf::from),
+            dirs::config_dir(),
+        )?;
+        Self::discover_in(&config)
     }
 
     /// Like [`discover`](Self::discover) with an explicit Desktop config directory.
@@ -79,6 +83,12 @@ impl ComfyInstall {
                 .map_or_else(|| self.base.join("models").join(folder), |(_, p)| p.clone()),
         )
     }
+}
+
+fn config_location(override_dir: Option<PathBuf>, system_dir: Option<PathBuf>) -> Option<PathBuf> {
+    override_dir
+        .filter(|p| !p.as_os_str().is_empty())
+        .or_else(|| system_dir.map(|dir| dir.join("ComfyUI")))
 }
 
 fn read_small(path: &Path) -> Option<String> {
@@ -176,4 +186,16 @@ fn clean(value: &str) -> String {
         .trim_matches(['"', '\''])
         .trim_end_matches(['/', '\\'])
         .to_owned()
+}
+
+#[cfg(test)]
+mod isolation_tests {
+    use super::*;
+
+    #[test]
+    fn explicit_comfy_config_keeps_a_fresh_install_separate() {
+        let own = PathBuf::from("C:/test-user/roaming/ComfyUI");
+        let system = PathBuf::from("C:/real-user/AppData/Roaming");
+        assert_eq!(config_location(Some(own.clone()), Some(system)), Some(own));
+    }
 }
