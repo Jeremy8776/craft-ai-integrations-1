@@ -15,6 +15,8 @@ pub enum Route {
     /// Download model files for this feature and run them through ComfyUI on this computer.
     /// `recipe` is the workflow id of the model to set up, such as `sam3-segment`.
     Local { feature: String, recipe: String },
+    /// Run a model in an app without ComfyUI. The engine has its own model files.
+    Native { feature: String, provider: String },
     /// Connect a hosted service. `preset` is a key of `craft_ai_core::PRESETS`.
     Service { preset: String },
 }
@@ -22,7 +24,7 @@ pub enum Route {
 /// One thing to set up.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupOption {
-    /// Stable: `local:<feature>:<recipe>` or `service:<preset>`.
+    /// Stable: `local:<feature>:<recipe>`, `native:<feature>:<provider>` or `service:<preset>`.
     pub id: String,
     pub title: String,
     /// One line about it. Empty for a local model, whose wording depends on the computer.
@@ -58,6 +60,20 @@ pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
                 usable: recipe.usable,
                 size_bytes: Some(recipe.total_bytes()),
             });
+            for native in recipe.native.iter().filter(|n| !n.models.is_empty()) {
+                locals.push(SetupOption {
+                    id: format!("native:{}:{}", feature.id, native.provider),
+                    title: native.label.clone(),
+                    note: String::new(),
+                    route: Route::Native {
+                        feature: feature.id.clone(),
+                        provider: native.provider.clone(),
+                    },
+                    unlocks: vec![feature.id.clone()],
+                    usable: recipe.usable,
+                    size_bytes: Some(native.total_bytes()),
+                });
+            }
         }
         for option in &feature.cloud {
             let Some(preset) = PRESETS.iter().find(|p| p.key == option.preset) else {

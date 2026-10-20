@@ -2,7 +2,7 @@
 //! in it is plain language.
 use craft_ai_features::{
     Feature, Gpu, GpuVendor, InstalledFile, Inventory, Os, SetupOffer, SetupRoute, StepKind,
-    SystemProfile, agreement, gigabytes, portable_for, setup_offer,
+    SystemProfile, agreement, gigabytes, portable_for, setup_offer, setup_offer_native,
 };
 
 fn select_subject() -> Feature {
@@ -41,6 +41,18 @@ fn offer(profile: &SystemProfile, inventory: &Inventory, route: SetupRoute) -> O
 
 fn kinds(o: &SetupOffer) -> Vec<StepKind> {
     o.steps.iter().map(|s| s.kind).collect()
+}
+
+/// A native offer is for the runtime that was asked for: Burn names no files so it gets none, and
+/// Candle gets its three own files.
+#[test]
+fn a_native_offer_is_for_the_selected_provider_not_any_built_in_engine() {
+    let profile = pc(Os::Windows, vec![]);
+    let feature = select_subject();
+    assert!(setup_offer_native(&feature, "burn", &profile, &empty()).is_none());
+    let candle = setup_offer_native(&feature, "candle", &profile, &empty()).unwrap();
+    assert_eq!(kinds(&candle), [StepKind::Model; 3]);
+    assert_eq!(candle.download_bytes, 3_441_325_459);
 }
 
 #[test]
@@ -148,16 +160,21 @@ fn other_systems_get_plain_steps_and_no_install_button() {
     }
 }
 
+/// The built-in route needs only the runtime's own three files: no ComfyUI, no node packs, and the
+/// one licence to accept, on any system.
 #[test]
 fn the_built_in_route_needs_only_the_model() {
     let p = pc(Os::Windows, vec![card(GpuVendor::Nvidia, "RTX 3090")]);
     let o = offer(&p, &empty(), SetupRoute::BuiltIn).unwrap();
-    assert_eq!(kinds(&o), [StepKind::Model]);
+    assert_eq!(kinds(&o), [StepKind::Model; 3]);
+    assert_eq!(o.download_bytes, 3_441_325_459);
+    assert_eq!(o.licences.len(), 1);
+    assert_eq!(o.licences[0].name, "Meta SAM License");
     assert!(o.portable.is_none() && o.manual_steps.is_empty());
     assert!(o.can_install());
     // Even on a system with no ComfyUI build at all.
     let o = offer(&pc(Os::Linux, vec![]), &empty(), SetupRoute::BuiltIn).unwrap();
-    assert_eq!(kinds(&o), [StepKind::Model]);
+    assert_eq!(kinds(&o), [StepKind::Model; 3]);
     assert!(o.can_install());
 }
 
