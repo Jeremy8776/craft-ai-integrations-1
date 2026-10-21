@@ -218,15 +218,32 @@ fn the_picker_then_lists_sam_3_as_ready_not_as_something_to_install() {
     // SAM 3 is ready; SAM 2.1 is not installed, so it keeps its way in; the built-in engine is a
     // separate option and this app has no adapter for it.
     assert_eq!(view.groups.len(), 3);
-    let in_state = |state| view.groups.iter().find(|g| g.state == state).unwrap();
-    assert!(in_state(GroupState::Ready).models[0].selected);
+    let comfy = |state| {
+        view.groups
+            .iter()
+            .find(|g| g.state == state && !g.title.contains("built in"))
+            .unwrap()
+    };
+    assert!(comfy(GroupState::Ready).models[0].selected);
     assert_eq!(
-        in_state(GroupState::NotSetUp).setup,
+        comfy(GroupState::NotSetUp).setup,
         Some(SetupLink::New {
             option: "local:select-subject:sam21-segment".into()
         })
     );
-    assert_eq!(in_state(GroupState::NeedsAdapter).setup, None);
+    // With the Candle adapter built in the engine can be set up; without it, it is only listed.
+    let native = view
+        .groups
+        .iter()
+        .find(|g| g.title.contains("built in"))
+        .unwrap();
+    if cfg!(feature = "candle") {
+        assert_eq!(native.state, GroupState::NotSetUp);
+        assert!(native.setup.is_some());
+    } else {
+        assert_eq!(native.state, GroupState::NeedsAdapter);
+        assert_eq!(native.setup, None);
+    }
     assert!(view.current.unwrap().problem.is_none());
 }
 

@@ -349,6 +349,29 @@ fn native_files_in_separate_directories_do_not_count_as_a_working_model() {
     assert_eq!(plan.missing_files[0].filename, "model.safetensors");
 }
 
+/// A registered folder that has gone (an unplugged drive, a deleted folder) is not a candidate. It
+/// does not stop discovery in the folders that remain.
+#[test]
+fn a_registered_folder_that_has_gone_does_not_stop_native_discovery() {
+    let w = world();
+    let feature = small_native_feature();
+    let directory = w.models.path().join("kept");
+    for model in &feature.locals[0].native[0].models {
+        write(
+            &directory,
+            &model.filename,
+            &vec![b'x'; model.size_bytes as usize],
+        );
+    }
+    let d = desk(&w);
+    d.add(w.models.path(), None).unwrap();
+    let gone = tempfile::tempdir().unwrap();
+    d.add(gone.path(), None).unwrap();
+    drop(gone);
+    let found = d.native_files(&feature, "candle").unwrap();
+    assert_eq!(found.directory, Some(directory));
+}
+
 /// A native download goes only to the chosen default folder, never to a folder linked from ComfyUI, and asking for the path creates nothing.
 #[test]
 fn native_downloads_go_only_to_the_chosen_default_not_a_linked_folder() {
