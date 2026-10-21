@@ -165,3 +165,28 @@ fn no_native_option_without_a_usable_recipe() {
             .all(|o| !matches!(o.route, Route::Native { .. }))
     );
 }
+
+/// Every local model comes before any built-in runtime, whichever tool names each, and the
+/// runtimes come before hosted services.
+#[test]
+fn native_options_follow_every_local_option_of_every_feature() {
+    let first = builtin()
+        .into_iter()
+        .find(|f| f.id == "select-subject")
+        .unwrap();
+    let mut second = first.clone();
+    second.id = "another-tool".to_owned();
+    second.locals.iter_mut().for_each(|r| r.native.clear());
+    let options = setup_options(&[first, second]);
+    let kind = |o: &craft_ai_features::SetupOption| match o.route {
+        Route::Local { .. } => 0,
+        Route::Native { .. } => 1,
+        Route::Service { .. } => 2,
+    };
+    let kinds: Vec<_> = options.iter().map(kind).collect();
+    assert!(kinds.contains(&1), "a native option is offered");
+    assert!(
+        kinds.is_sorted(),
+        "locals, then runtimes, then services: {kinds:?}"
+    );
+}

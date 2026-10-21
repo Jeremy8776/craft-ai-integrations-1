@@ -12,7 +12,7 @@ use craft_ai_features::{Route, SetupOption};
 use craft_ai_native::secrets::secret_for;
 
 use crate::client::AiClient;
-use crate::local::is_recipe_connection;
+use crate::local::{is_recipe_connection, native_connection_id};
 use crate::picker::{GroupState, PickerGroup, PickerModel, SetupLink};
 
 /// The binding the app would use: its own choice first, then the launcher default.
@@ -149,13 +149,17 @@ pub(crate) fn unset_groups(
                     "Not installed. Runs on this computer.".to_owned(),
                 )
             }
-            Route::Native { provider, .. } => {
+            Route::Native { feature, provider } => {
                 // A saved connection is not proof the files are still there. One whose weights
                 // file has gone keeps the Set up link, so the model can be installed again.
                 let saved: Vec<&ModelInfo> = store
                     .connections
                     .iter()
-                    .filter(|c| c.provider == *provider && c.locality == Locality::Local)
+                    .filter(|c| {
+                        c.provider == *provider
+                            && c.locality == Locality::Local
+                            && c.id.as_str() == native_connection_id(feature, provider)
+                    })
                     .flat_map(|c| &c.models)
                     .filter(|m| fits(role, m).is_some())
                     .collect();

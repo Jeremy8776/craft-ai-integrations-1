@@ -130,6 +130,45 @@ fn a_checked_result_survives_a_plan_that_found_the_files() {
     assert_eq!(session.problem(), None);
 }
 
+/// A verified result belongs to the directory it was checked in. When a later plan for the same
+/// target finds complete files in another directory, the old result is dropped, so the widget
+/// cannot offer to use the old one; progress in the same directory still keeps it.
+#[test]
+fn a_checked_result_is_dropped_when_discovery_picks_another_directory() {
+    let (dir, desk, plan) = prepared();
+    let destination = plan.destination().unwrap().to_owned();
+    std::fs::create_dir_all(&destination).unwrap();
+    for (i, file) in plan.route().models.iter().enumerate() {
+        std::fs::write(destination.join(&file.filename), vec![b'x'; i + 1]).unwrap();
+    }
+    let mut session = SetupSession::new(plan.clone());
+    session.accept_licences(true);
+    let request = session.begin(SetupTask::Download).unwrap();
+    let result = request.run(
+        &craft_ai_comfy_env::Downloader::new(Default::default()),
+        None,
+        &mut |_, _| {},
+    );
+    assert!(session.complete(request.ticket(), result));
+    // A bigger folder elsewhere under the same registered root now has the same files, and wins.
+    let elsewhere = dir.path().join("models").join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    for (i, file) in plan.route().models.iter().enumerate() {
+        std::fs::write(elsewhere.join(&file.filename), vec![b'x'; i + 1]).unwrap();
+    }
+    std::fs::remove_dir_all(&destination).unwrap();
+    let later = desk
+        .prepare_native_setup(&feature(), "candle", &app(&dir))
+        .unwrap();
+    assert_eq!(later.existing_directory(), Some(elsewhere.as_path()));
+    assert!(plan.same_target(&later));
+    assert_eq!(session.review(later), None);
+    assert!(
+        session.checked().is_none(),
+        "the old directory is not offered"
+    );
+}
+
 /// A plan for other files (another route for the same tool) is a different target: the approval
 /// goes and the running worker is cancelled.
 #[test]
