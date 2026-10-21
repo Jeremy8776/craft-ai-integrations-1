@@ -8,21 +8,25 @@ use craft_ai_native::{secrets::MemoryStore, shared::SharedStore};
 use native_setup_support::{feature, world};
 use std::sync::Arc;
 
-/// A prepared setup plan on a temporary store, whose engine factory refuses to build a model.
-fn prepared() -> (tempfile::TempDir, FolderDesk, NativeSetupPlan) {
-    let (dir, desk, _) = world();
+/// The client of a temporary store, whose engine factory refuses to build a model.
+fn app(dir: &tempfile::TempDir) -> AiClient {
     let mut factory = ProviderFactory::standard();
     factory.register("candle", |_, _| {
         Err(AiError::unsupported("setup must not construct a model"))
     });
-    let app = AiClient::new(
+    AiClient::new(
         AppId::new("test-app").unwrap(),
         SharedStore::new(dir.path().join("connections.json")),
         Arc::new(MemoryStore::new()),
     )
-    .with_factory(factory);
+    .with_factory(factory)
+}
+
+/// A prepared setup plan on a temporary store, whose engine factory refuses to build a model.
+fn prepared() -> (tempfile::TempDir, FolderDesk, NativeSetupPlan) {
+    let (dir, desk, _) = world();
     let plan = desk
-        .prepare_native_setup(&feature(), "candle", &app)
+        .prepare_native_setup(&feature(), "candle", &app(&dir))
         .unwrap();
     (dir, desk, plan)
 }
@@ -72,6 +76,76 @@ fn changing_the_destination_discards_the_old_approval() {
     );
     assert!(!session.accepted());
     assert!(session.begin(SetupTask::Download).is_none());
+}
+
+/// Progress is not a new target. A plan for the same destination that needs fewer bytes (a file
+/// has landed) keeps the approval, the running request and its ticket, and does not cancel the worker.
+#[test]
+fn progress_alone_does_not_cancel_a_running_request() {
+    let (dir, desk, plan) = prepared();
+    let destination = plan.destination().unwrap().to_owned();
+    let mut session = SetupSession::new(plan.clone());
+    session.accept_licences(true);
+    let request = session.begin(SetupTask::Download).unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    let first = &plan.route().models[0];
+    std::fs::write(
+        destination.join(&first.filename),
+        vec![b'x'; first.size_bytes as usize],
+    )
+    .unwrap();
+    let later = desk
+        .prepare_native_setup(&feature(), "candle", &app(&dir))
+        .unwrap();
+    assert!(later.download_bytes() < plan.download_bytes());
+    assert_eq!(session.review(later), None, "the worker is left running");
+    assert!(session.busy());
+    assert!(session.complete(request.ticket(), Err(AiError::invalid("done"))));
+}
+
+/// A verified result survives the next frame's plan, which now finds the files and needs no bytes.
+#[test]
+fn a_checked_result_survives_a_plan_that_found_the_files() {
+    let (dir, desk, plan) = prepared();
+    let destination = plan.destination().unwrap().to_owned();
+    std::fs::create_dir_all(&destination).unwrap();
+    for (i, file) in plan.route().models.iter().enumerate() {
+        std::fs::write(destination.join(&file.filename), vec![b'x'; i + 1]).unwrap();
+    }
+    let mut session = SetupSession::new(plan);
+    session.accept_licences(true);
+    let request = session.begin(SetupTask::Download).unwrap();
+    let result = request.run(
+        &craft_ai_comfy_env::Downloader::new(Default::default()),
+        None,
+        &mut |_, _| {},
+    );
+    assert!(session.complete(request.ticket(), result));
+    let later = desk
+        .prepare_native_setup(&feature(), "candle", &app(&dir))
+        .unwrap();
+    assert_eq!(later.download_bytes(), 0);
+    assert_eq!(session.review(later), None);
+    assert!(session.checked().is_some(), "the verified result is kept");
+    assert_eq!(session.problem(), None);
+}
+
+/// A plan for other files (another route for the same tool) is a different target: the approval
+/// goes and the running worker is cancelled.
+#[test]
+fn a_different_route_discards_the_approval_and_the_running_request() {
+    let (dir, desk, plan) = prepared();
+    let mut session = SetupSession::new(plan);
+    session.accept_licences(true);
+    let request = session.begin(SetupTask::Download).unwrap();
+    let mut other = feature();
+    other.locals[0].native[0].models[0].filename = "other.safetensors".to_owned();
+    let changed = desk
+        .prepare_native_setup(&other, "candle", &app(&dir))
+        .unwrap();
+    assert_eq!(session.review(changed), Some(request.ticket()));
+    assert!(!session.busy());
+    assert!(!session.accepted());
 }
 
 /// A finished download yields checked files but writes no binding; using them is a separate step.
