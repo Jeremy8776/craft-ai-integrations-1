@@ -308,16 +308,21 @@ fn the_local_model_is_greyed_until_a_local_connection_offers_one_for_the_tool() 
             .iter()
             .all(|g| g.locality == Some(Locality::Local))
     );
-    // This app has no adapter for the built-in engine, so it is listed but cannot be set up here.
+    // Without the Candle adapter this app lists the built-in engine but cannot set it up here.
     let native = view
         .groups
         .iter()
         .find(|g| g.title.contains("built in"))
         .unwrap();
-    assert_eq!(
-        (native.state, native.setup.clone()),
-        (GroupState::NeedsAdapter, None)
-    );
+    if cfg!(feature = "candle") {
+        assert_eq!(native.state, GroupState::NotSetUp);
+        assert!(native.setup.is_some());
+    } else {
+        assert_eq!(
+            (native.state, native.setup.clone()),
+            (GroupState::NeedsAdapter, None)
+        );
+    }
     let links: Vec<_> = comfy.iter().map(|g| g.setup.clone()).collect();
     assert_eq!(
         links,

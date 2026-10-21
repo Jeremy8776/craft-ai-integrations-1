@@ -1,6 +1,8 @@
 //! Building the provider groups for the picker: the connections a person has, and the providers
 //! they could still set up. Pure functions over the store, so each rule has its own test.
 
+use std::path::Path;
+
 use craft_ai_core::role::fits;
 use craft_ai_core::{
     AppId, Auth, Billing, Binding, Connection, InputRole, Locality, ModelInfo, PRESETS, Role,
@@ -96,7 +98,8 @@ pub(crate) fn connection_groups(
 }
 
 /// Providers that could do the tool and are not set up, greyed rather than hidden. A model that
-/// can be downloaded but has no workflow to run it yet is not offered.
+/// can be downloaded but has no workflow to run it yet is not offered. A built-in model whose
+/// saved connection has lost its weights file is listed again, so it can be set up afresh.
 pub(crate) fn unset_groups(
     client: &AiClient,
     store: &StoreFile,
@@ -147,19 +150,30 @@ pub(crate) fn unset_groups(
                 )
             }
             Route::Native { provider, .. } => {
-                if store.connections.iter().any(|c| {
-                    c.provider == *provider
-                        && c.locality == Locality::Local
-                        && c.models.iter().any(|m| fits(role, m).is_some())
+                // A saved connection is not proof the files are still there. One whose weights
+                // file has gone keeps the Set up link, so the model can be installed again.
+                let saved: Vec<&ModelInfo> = store
+                    .connections
+                    .iter()
+                    .filter(|c| c.provider == *provider && c.locality == Locality::Local)
+                    .flat_map(|c| &c.models)
+                    .filter(|m| fits(role, m).is_some())
+                    .collect();
+                if saved.iter().any(|m| {
+                    m.local_file
+                        .as_deref()
+                        .is_some_and(|file| Path::new(file).is_file())
                 }) {
                     continue;
                 }
+                let files_missing = !saved.is_empty();
                 if client.has_adapter(provider) {
-                    (
-                        Some(Locality::Local),
-                        GroupState::NotSetUp,
-                        "Not installed. Runs on this computer.".to_owned(),
-                    )
+                    let note = if files_missing {
+                        "The model files are missing. Set it up again."
+                    } else {
+                        "Not installed. Runs on this computer."
+                    };
+                    (Some(Locality::Local), GroupState::NotSetUp, note.to_owned())
                 } else {
                     (
                         Some(Locality::Local),

@@ -18,6 +18,20 @@ fn an_unusable_recipe_offers_neither_files_nor_a_download_destination() {
     assert!(desk.native_files(&feature, "candle").is_err());
 }
 
+/// An unusable recipe in front does not hide the usable one behind it: files are found for, and a
+/// destination is given to, the first recipe that can run.
+#[test]
+fn an_unusable_first_recipe_does_not_hide_a_usable_one_from_file_setup() {
+    let (_dir, desk, _) = world();
+    let mut feature = feature();
+    let mut parked = feature.locals[0].clone();
+    parked.usable = false;
+    parked.native.clear();
+    feature.locals.insert(0, parked);
+    assert!(desk.native_download_dir(&feature, "candle").is_ok());
+    assert!(desk.native_files(&feature, "candle").is_ok());
+}
+
 /// A cancel set before the install starts means no request and no destination folder.
 #[test]
 fn cancelled_before_start_neither_contacts_a_source_nor_creates_a_destination() {

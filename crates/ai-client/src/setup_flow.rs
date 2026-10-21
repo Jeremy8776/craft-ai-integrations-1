@@ -142,9 +142,13 @@ impl SetupSession {
     pub fn problem(&self) -> Option<ErrorKind> {
         self.problem
     }
-    /// Return the old ticket so the host can cancel its worker. Stale answers cannot update this session.
+    /// Shows `plan`. A plan for the same target (see [`NativeSetupPlan::same_target`]) only
+    /// refreshes what is shown: the approval, the running request and the checked result stay, so
+    /// a download's own progress cannot cancel it. A different target discards them and returns
+    /// the old ticket so the host can cancel its worker. Stale answers cannot update this session.
     pub fn review(&mut self, plan: NativeSetupPlan) -> Option<SetupTicket> {
-        if self.plan == plan {
+        if self.plan.same_target(&plan) {
+            self.plan = plan;
             return None;
         }
         let previous = self.cancel();
