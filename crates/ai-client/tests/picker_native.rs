@@ -1,6 +1,6 @@
 //! A built-in model must not advertise an actionable setup route to an app without its engine.
 use craft_ai_client::{AiClient, GroupState, ProviderFactory, SetupLink, ToolDesk};
-use craft_ai_core::{AiError, AppId};
+use craft_ai_core::{AiError, AppId, ConnectionId};
 use craft_ai_native::secrets::MemoryStore;
 use craft_ai_native::shared::SharedStore;
 use std::sync::Arc;
@@ -90,4 +90,49 @@ fn a_built_in_model_whose_file_is_gone_can_be_set_up_again() {
     assert!(matches!(&groups[0].setup, Some(SetupLink::New { option })
         if option == "native:select-subject:candle"));
     assert!(groups[0].note.contains("missing"));
+}
+
+/// Another built-in connection for the same runtime and role, from another model, is not this
+/// model: the option for this one keeps its Set up link.
+#[test]
+fn a_built_in_connection_for_another_model_does_not_hide_this_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let shared = SharedStore::new(dir.path().join("connections.json"));
+    let mut factory = ProviderFactory::standard();
+    factory.register("candle", |_, _| Err(AiError::unsupported("not run here")));
+    let client = AiClient::new(
+        AppId::new("test-app").unwrap(),
+        shared.clone(),
+        Arc::new(MemoryStore::new()),
+    )
+    .with_factory(factory);
+    let features = craft_ai_features::builtin();
+    let feature = features
+        .iter()
+        .find(|feature| feature.id == "select-subject")
+        .unwrap();
+    let role = feature.role().unwrap();
+    let weights = dir.path().join("model.safetensors");
+    std::fs::write(&weights, b"weights").unwrap();
+    let launcher = AiClient::new(
+        AppId::new("launcher").unwrap(),
+        shared.clone(),
+        Arc::new(MemoryStore::new()),
+    );
+    ToolDesk::new(launcher, shared.clone(), None)
+        .enable_native(feature, &weights)
+        .unwrap();
+    // The file is there, but the connection now belongs to some other model.
+    let mut store = shared.load().unwrap();
+    store.connections[0].id = ConnectionId::new("local-another-model-candle").unwrap();
+    shared.replace(&store).unwrap();
+    let options = craft_ai_features::setup_options(&features);
+    let view = client.picker(&role, &options).unwrap();
+    assert!(
+        view.groups.iter().any(|g| g.title.contains("built in")
+            && g.state == GroupState::NotSetUp
+            && matches!(&g.setup, Some(SetupLink::New { option })
+                if option == "native:select-subject:candle")),
+        "this model still has a way in"
+    );
 }

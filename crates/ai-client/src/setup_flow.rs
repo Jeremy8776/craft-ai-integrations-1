@@ -149,6 +149,16 @@ impl SetupSession {
     pub fn review(&mut self, plan: NativeSetupPlan) -> Option<SetupTicket> {
         if self.plan.same_target(&plan) {
             self.plan = plan;
+            // A checked result belongs to the directory it was checked in. Keep it only while
+            // that is still where the plan's files are (or would go).
+            let current = self.plan.existing_directory().or(self.plan.destination());
+            if self
+                .checked
+                .as_ref()
+                .is_some_and(|checked| checked.weights().parent() != current)
+            {
+                self.checked = None;
+            }
             return None;
         }
         let previous = self.cancel();
