@@ -130,37 +130,46 @@ fn a_checked_result_survives_a_plan_that_found_the_files() {
     assert_eq!(session.problem(), None);
 }
 
-/// A verified result belongs to the directory it was checked in. When a later plan for the same
-/// target finds complete files in another directory, the old result is dropped, so the widget
-/// cannot offer to use the old one; progress in the same directory still keeps it.
-#[test]
-fn a_checked_result_is_dropped_when_discovery_picks_another_directory() {
-    let (dir, desk, plan) = prepared();
-    let destination = plan.destination().unwrap().to_owned();
-    std::fs::create_dir_all(&destination).unwrap();
+/// Complete, correctly sized files for `plan`'s route, in `dir`.
+fn write_files(dir: &std::path::Path, plan: &NativeSetupPlan) {
+    std::fs::create_dir_all(dir).unwrap();
     for (i, file) in plan.route().models.iter().enumerate() {
-        std::fs::write(destination.join(&file.filename), vec![b'x'; i + 1]).unwrap();
+        std::fs::write(dir.join(&file.filename), vec![b'x'; i + 1]).unwrap();
     }
-    let mut session = SetupSession::new(plan.clone());
-    session.accept_licences(true);
-    let request = session.begin(SetupTask::Download).unwrap();
-    let result = request.run(
+}
+
+/// Runs a request on this thread, the way a worker would, with no network.
+fn run(request: &craft_ai_client::SetupRequest) -> Result<craft_ai_client::CheckedNative, AiError> {
+    request.run(
         &craft_ai_comfy_env::Downloader::new(Default::default()),
         None,
         &mut |_, _| {},
-    );
-    assert!(session.complete(request.ticket(), result));
-    // A bigger folder elsewhere under the same registered root now has the same files, and wins.
-    let elsewhere = dir.path().join("models").join("elsewhere");
-    std::fs::create_dir_all(&elsewhere).unwrap();
-    for (i, file) in plan.route().models.iter().enumerate() {
-        std::fs::write(elsewhere.join(&file.filename), vec![b'x'; i + 1]).unwrap();
-    }
-    std::fs::remove_dir_all(&destination).unwrap();
+    )
+}
+
+/// A verified result belongs to the directory it was checked in. When a later plan for the same
+/// target finds complete files in another directory (neither where it was checked nor where a
+/// download would go), the old result is dropped, so the widget cannot offer to use it.
+#[test]
+fn a_checked_result_is_dropped_when_discovery_picks_another_directory() {
+    let (dir, desk, plan) = prepared();
+    let first = dir.path().join("models").join("first");
+    write_files(&first, &plan);
+    let plan = desk
+        .prepare_native_setup(&feature(), "candle", &app(&dir))
+        .unwrap();
+    assert_eq!(plan.existing_directory(), Some(first.as_path()));
+    let mut session = SetupSession::new(plan.clone());
+    let request = session.begin(SetupTask::CheckExisting).unwrap();
+    assert!(session.complete(request.ticket(), run(&request)));
+    assert!(session.checked().is_some());
+    let second = dir.path().join("models").join("second");
+    write_files(&second, &plan);
+    std::fs::remove_dir_all(&first).unwrap();
     let later = desk
         .prepare_native_setup(&feature(), "candle", &app(&dir))
         .unwrap();
-    assert_eq!(later.existing_directory(), Some(elsewhere.as_path()));
+    assert_eq!(later.existing_directory(), Some(second.as_path()));
     assert!(plan.same_target(&later));
     assert_eq!(session.review(later), None);
     assert!(
@@ -169,39 +178,27 @@ fn a_checked_result_is_dropped_when_discovery_picks_another_directory() {
     );
 }
 
-/// A late answer for the directory a review has moved away from cannot bring its result back.
-/// The request is still the running one, so its ticket is accepted, but the result is not kept.
+/// A late answer for a directory the review has moved away from cannot bring its result back. The
+/// request is still the running one, so its ticket is accepted, but the result is not kept.
 #[test]
 fn a_late_result_for_a_directory_the_review_moved_from_is_not_kept() {
     let (dir, desk, plan) = prepared();
-    let destination = plan.destination().unwrap().to_owned();
-    std::fs::create_dir_all(&destination).unwrap();
-    for (i, file) in plan.route().models.iter().enumerate() {
-        std::fs::write(destination.join(&file.filename), vec![b'x'; i + 1]).unwrap();
-    }
-    let mut session = SetupSession::new(
-        desk.prepare_native_setup(&feature(), "candle", &app(&dir))
-            .unwrap(),
-    );
-    session.accept_licences(true);
-    let request = session.begin(SetupTask::Download).unwrap();
-    let result = request.run(
-        &craft_ai_comfy_env::Downloader::new(Default::default()),
-        None,
-        &mut |_, _| {},
-    );
+    let first = dir.path().join("models").join("first");
+    write_files(&first, &plan);
+    let plan = desk
+        .prepare_native_setup(&feature(), "candle", &app(&dir))
+        .unwrap();
+    let mut session = SetupSession::new(plan.clone());
+    let request = session.begin(SetupTask::CheckExisting).unwrap();
+    let result = run(&request);
     assert!(result.is_ok());
-    // Discovery now prefers a complete copy elsewhere, while the old request is still unanswered.
-    let elsewhere = dir.path().join("models").join("elsewhere");
-    std::fs::create_dir_all(&elsewhere).unwrap();
-    for (i, file) in plan.route().models.iter().enumerate() {
-        std::fs::write(elsewhere.join(&file.filename), vec![b'x'; i + 1]).unwrap();
-    }
-    std::fs::remove_dir_all(&destination).unwrap();
+    let second = dir.path().join("models").join("second");
+    write_files(&second, &plan);
+    std::fs::remove_dir_all(&first).unwrap();
     let later = desk
         .prepare_native_setup(&feature(), "candle", &app(&dir))
         .unwrap();
-    assert_eq!(later.existing_directory(), Some(elsewhere.as_path()));
+    assert_eq!(later.existing_directory(), Some(second.as_path()));
     assert_eq!(session.review(later), None, "the request keeps running");
     assert!(session.complete(request.ticket(), result));
     assert!(
@@ -209,6 +206,27 @@ fn a_late_result_for_a_directory_the_review_moved_from_is_not_kept() {
         "the old directory is not offered"
     );
     assert_eq!(session.problem(), None, "a late answer is not an error");
+}
+
+/// Complete files elsewhere do not turn a download into the wrong answer: a download goes to its
+/// destination, and its verified result there is kept even when discovery points at another copy.
+#[test]
+fn a_download_result_is_kept_when_complete_files_exist_elsewhere() {
+    let (dir, desk, plan) = prepared();
+    let destination = plan.destination().unwrap().to_owned();
+    write_files(&destination, &plan);
+    let other = dir.path().join("models").join("zzz-other-copy");
+    write_files(&other, &plan);
+    let plan = desk
+        .prepare_native_setup(&feature(), "candle", &app(&dir))
+        .unwrap();
+    assert_ne!(plan.existing_directory(), Some(destination.as_path()));
+    assert!(plan.existing_directory().is_some());
+    let mut session = SetupSession::new(plan);
+    session.accept_licences(true);
+    let request = session.begin(SetupTask::Download).unwrap();
+    assert!(session.complete(request.ticket(), run(&request)));
+    assert!(session.checked().is_some(), "the download's result is kept");
 }
 
 /// A plan for other files (another route for the same tool) is a different target: the approval

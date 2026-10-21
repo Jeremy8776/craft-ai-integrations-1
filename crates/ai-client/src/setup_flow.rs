@@ -151,11 +151,10 @@ impl SetupSession {
             self.plan = plan;
             // A checked result belongs to the directory it was checked in. Keep it only while
             // that is still where the plan's files are (or would go).
-            let current = self.current_directory();
             if self
                 .checked
                 .as_ref()
-                .is_some_and(|checked| checked.weights().parent() != current)
+                .is_some_and(|checked| !self.is_current(checked.weights().parent()))
             {
                 self.checked = None;
             }
@@ -169,10 +168,11 @@ impl SetupSession {
         self.progress = None;
         previous
     }
-    /// Where the plan's files are, or would go: the directory that already holds them, else the
-    /// download destination. A checked result is kept only for this directory.
-    fn current_directory(&self) -> Option<&std::path::Path> {
-        self.plan.existing_directory().or(self.plan.destination())
+    /// Whether `directory` is one the plan stands for: where it found complete files, or where a
+    /// download would go. A checked result is kept only for such a directory.
+    fn is_current(&self, directory: Option<&std::path::Path>) -> bool {
+        directory.is_some()
+            && (directory == self.plan.existing_directory() || directory == self.plan.destination())
     }
     /// Consumes approval and returns a worker request, never performs I/O on the drawing thread.
     pub fn begin(&mut self, task: SetupTask) -> Option<SetupRequest> {
@@ -233,7 +233,7 @@ impl SetupSession {
             {
                 // A late answer for a directory the review has moved away from is dropped
                 // quietly: it is not an error, and the old directory is not offered.
-                let current = checked.weights().parent() == self.current_directory();
+                let current = self.is_current(checked.weights().parent());
                 self.checked = current.then_some(checked);
             }
             Ok(_) => {
