@@ -18,4 +18,5 @@ NF = [
     ('built-in-offer-compares-comfyui-files', F + 'setup.rs', 'let compared = if let Some(native) = native {', 'let compared = if let Some(native) = native.filter(|_| false) {', FE, 'setup', 'needs_only_the_model'),
     ('option-offered-for-a-route-without-files', F + 'options.rs', 'for native in recipe.native.iter().filter(|n| !n.models.is_empty()) {', 'for native in recipe.native.iter() {', FE, 'native_setup', 'not_unbuilt_burn'),
     ('native-options-before-later-locals', F + 'options.rs', 'locals.extend(natives);', 'locals.splice(0..0, natives);', FE, 'native_setup', 'follow_every_local'),
+    ('built-in-offer-uses-the-comfyui-terms', F + 'setup.rs', 'agreement: agreement_for(route),', 'agreement: agreement(),', FE, 'setup', 'agrees_to_its_own'),
 ]
