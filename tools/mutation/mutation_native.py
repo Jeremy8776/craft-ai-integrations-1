@@ -7,7 +7,10 @@ F = 'crates/ai-features/src/'
 FE = 'craft-ai-features'
 
 NF = [
-    ('native-plan-ignores-usable', F + 'plan.rs', 'let Some(route) = recipe.filter(|r| r.usable).and_then(|r| {', 'let Some(route) = recipe.and_then(|r| {', FE, 'native_setup', 'cannot_run_yet'),
+    ('native-plan-ignores-usable', F + 'plan.rs', 'let recipe = feature.first_usable_recipe();', 'let recipe = feature.locals.first();', FE, 'native_setup', 'cannot_run_yet'),
+    ('first-usable-recipe-takes-the-first', F + 'feature.rs', 'self.locals.iter().find(|r| r.usable)', 'self.locals.first()', FE, 'native_setup', 'first_usable_recipe'),
+    ('native-offer-takes-the-first-recipe', F + 'setup.rs', 'feature.first_usable_recipe()?', 'feature.locals.first()?', FE, 'setup', 'unusable_first_recipe'),
+    ('native-option-from-every-recipe', F + 'options.rs', 'if let Some(recipe) = feature.first_usable_recipe() {', 'for recipe in &feature.locals {', FE, 'native_setup', 'first_usable_recipe'),
     ('native-plan-takes-a-route-without-files', F + 'plan.rs', '.find(|n| n.provider == provider && !n.models.is_empty())\n    }) else {\n        return out;\n    };\n    fill_files(&mut out, &route.models, inventory);\n    check_disk', '.find(|n| n.provider == provider)\n    }) else {\n        return out;\n    };\n    fill_files(&mut out, &route.models, inventory);\n    check_disk', FE, 'native_setup', 'unfinished_or_unknown'),
     ('native-plan-takes-any-provider', F + 'plan.rs', '.find(|n| n.provider == provider && !n.models.is_empty())\n    }) else {\n        return out;\n    };\n    fill_files(&mut out, &route.models, inventory);\n    check_disk', '.find(|n| !n.models.is_empty())\n    }) else {\n        return out;\n    };\n    fill_files(&mut out, &route.models, inventory);\n    check_disk', FE, 'native_setup', 'unfinished_or_unknown'),
     ('native-plan-skips-the-disk-check', F + 'plan.rs', '    fill_files(&mut out, &route.models, inventory);\n    check_disk(&mut out, inventory);', '    fill_files(&mut out, &route.models, inventory);', FE, 'native_setup', 'free_space'),

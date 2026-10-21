@@ -55,6 +55,20 @@ fn a_native_offer_is_for_the_selected_provider_not_any_built_in_engine() {
     assert_eq!(candle.download_bytes, 3_441_325_459);
 }
 
+/// An unusable recipe in front does not hide the usable one behind it from the Install offer.
+#[test]
+fn a_native_offer_skips_an_unusable_first_recipe() {
+    let profile = pc(Os::Windows, vec![]);
+    let mut feature = select_subject();
+    let real = feature.locals[0].clone();
+    let mut parked = real.clone();
+    parked.usable = false;
+    parked.native.clear();
+    feature.locals = vec![parked, real];
+    let candle = setup_offer_native(&feature, "candle", &profile, &empty()).unwrap();
+    assert_eq!(kinds(&candle), [StepKind::Model; 3]);
+}
+
 #[test]
 fn a_windows_pc_with_nothing_gets_the_whole_list_in_order() {
     let p = pc(Os::Windows, vec![card(GpuVendor::Nvidia, "RTX 3090")]);

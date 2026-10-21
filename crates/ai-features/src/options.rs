@@ -41,8 +41,9 @@ pub struct SetupOption {
     pub size_bytes: Option<u64>,
 }
 
-/// Every local model first, one per recipe in catalogue order, then hosted services in the order
-/// the features first name them.
+/// Every local model first, one per recipe in catalogue order, each tool's built-in runtimes
+/// (one per runtime, from its first usable recipe) after its models, then hosted services in the
+/// order the features first name them.
 pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
     let mut locals = Vec::new();
     let mut services: Vec<SetupOption> = Vec::new();
@@ -60,6 +61,10 @@ pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
                 usable: recipe.usable,
                 size_bytes: Some(recipe.total_bytes()),
             });
+        }
+        // A built-in runtime is set up from the first recipe apps can run, the one planning and
+        // file setup use, so each runtime gets one option and following it cannot fail.
+        if let Some(recipe) = feature.first_usable_recipe() {
             for native in recipe.native.iter().filter(|n| !n.models.is_empty()) {
                 locals.push(SetupOption {
                     id: format!("native:{}:{}", feature.id, native.provider),
@@ -70,7 +75,7 @@ pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
                         provider: native.provider.clone(),
                     },
                     unlocks: vec![feature.id.clone()],
-                    usable: recipe.usable,
+                    usable: true,
                     size_bytes: Some(native.total_bytes()),
                 });
             }

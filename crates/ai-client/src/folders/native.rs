@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use craft_ai_comfy_env::{Basis, Downloader, KnownFile, Progress, scan_model_folder, verify_file};
+use craft_ai_comfy_env::{
+    Basis, Downloader, KnownFile, Progress, ScanError, scan_model_folder, verify_file,
+};
 use craft_ai_core::model_folders::FolderOrigin;
 use craft_ai_core::{AiError, ErrorKind, SecretString};
 use craft_ai_features::{Feature, InstalledFile, Inventory, NativeRoute};
@@ -45,8 +47,12 @@ impl FolderDesk {
         let mut candidates: BTreeMap<PathBuf, Vec<InstalledFile>> = BTreeMap::new();
         for root in self.list()? {
             let root = Path::new(&root.path);
-            let scan = scan_model_folder(root, &known)
-                .map_err(|e| AiError::new(ErrorKind::InvalidRequest, e.to_string()))?;
+            // A folder that has gone (an unplugged drive, a deleted folder) is not a candidate. It
+            // must not stop discovery in the folders that remain.
+            let scan = match scan_model_folder(root, &known) {
+                Ok(scan) => scan,
+                Err(ScanError::NotAFolder) => continue,
+            };
             for found in scan.files.iter().filter(|f| f.basis == Some(Basis::Recipe)) {
                 let path = root.join(&found.rel);
                 let Some(dir) = path.parent() else { continue };
@@ -197,16 +203,15 @@ pub(super) fn install_into(
     Ok(())
 }
 
-/// The first recipe's usable route for `provider` that names files of its own. Refused when there
-/// is none, or when a file name is not a plain name (empty, dotted, or holding a slash or colon).
+/// The route of the first usable recipe ([`Feature::first_usable_recipe`]) for `provider` that
+/// names files of its own. Refused when there is none, or when a file name is not a plain name
+/// (empty, dotted, or holding a slash or colon).
 pub(super) fn native_route<'a>(
     feature: &'a Feature,
     provider: &str,
 ) -> Result<&'a NativeRoute, AiError> {
     let route = feature
-        .locals
-        .first()
-        .filter(|recipe| recipe.usable)
+        .first_usable_recipe()
         .and_then(|recipe| {
             recipe
                 .native
