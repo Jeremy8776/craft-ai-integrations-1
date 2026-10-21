@@ -97,6 +97,33 @@ pub fn agreement() -> Agreement {
     }
 }
 
+/// The terms the Install click agrees to for `route`. The ComfyUI route is [`agreement`]. The
+/// built-in route installs no ComfyUI and keeps its model files in the model folder the person
+/// chose, not in the app's own folder, so it has its own words and its own version.
+///
+/// DRAFT WORDING, like [`agreement`].
+pub fn agreement_for(route: SetupRoute) -> Agreement {
+    match route {
+        SetupRoute::ComfyUi => agreement(),
+        SetupRoute::BuiltIn => Agreement {
+            version: 2,
+            title: "Terms for setting up".to_owned(),
+            summary: "By clicking Install you agree to these terms.".to_owned(),
+            full_text: "This will download model files made by other people for the tool you chose. We did \
+                not make them. They come with their own licences, which you also accept by clicking \
+                Install.\n\n\
+                The files are saved in the model folder you chose as your default, and you can \
+                remove them later. We check that each download is exactly what its maker published, \
+                but we cannot promise that third-party models are free of faults or safe for every \
+                computer.\n\n\
+                You use them at your own risk. To the fullest extent the law allows, we are not \
+                responsible for loss, damage or problems caused by models we did not make, or by \
+                installing them. Nothing here limits rights you have by law."
+                .to_owned(),
+        },
+    }
+}
+
 /// Everything one Install click would do.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupOffer {
@@ -345,7 +372,7 @@ fn offer_for(
         steps,
         download_bytes,
         licences: compared.licences,
-        agreement: agreement(),
+        agreement: agreement_for(route),
         blockers,
         manual_steps,
         portable,

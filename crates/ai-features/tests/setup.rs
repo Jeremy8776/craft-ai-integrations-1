@@ -2,7 +2,8 @@
 //! in it is plain language.
 use craft_ai_features::{
     Feature, Gpu, GpuVendor, InstalledFile, Inventory, Os, SetupOffer, SetupRoute, StepKind,
-    SystemProfile, agreement, gigabytes, portable_for, setup_offer, setup_offer_native,
+    SystemProfile, agreement, agreement_for, gigabytes, portable_for, setup_offer,
+    setup_offer_native,
 };
 
 fn select_subject() -> Feature {
@@ -366,6 +367,27 @@ fn the_jargon_check_itself_catches_jargon() {
         ["unpack", "7z", "archive", "pip"]
     );
     assert!(jargon_in("Install ComfyUI.").is_empty());
+}
+
+/// The built-in route installs no ComfyUI and saves into the person's chosen model folder, so its
+/// terms say that, not that everything stays in the app's own folder. Its words have their own
+/// version, and the ComfyUI route keeps the original terms.
+#[test]
+fn a_built_in_offer_agrees_to_its_own_words_not_the_comfyui_ones() {
+    let profile = pc(Os::Windows, vec![]);
+    let offer = setup_offer_native(&select_subject(), "candle", &profile, &empty()).unwrap();
+    let text = &offer.agreement.full_text;
+    assert!(
+        !text.contains("ComfyUI") && !text.contains("app's own folder"),
+        "{text}"
+    );
+    assert!(text.contains("model folder"), "{text}");
+    assert_ne!(offer.agreement.version, agreement().version);
+    assert_eq!(
+        offer.agreement.full_text,
+        agreement_for(SetupRoute::BuiltIn).full_text
+    );
+    assert_eq!(agreement_for(SetupRoute::ComfyUi), agreement());
 }
 
 #[test]
