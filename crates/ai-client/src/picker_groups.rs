@@ -149,7 +149,11 @@ pub(crate) fn unset_groups(
                     "Not installed. Runs on this computer.".to_owned(),
                 )
             }
-            Route::Native { feature, provider } => {
+            Route::Native {
+                feature,
+                provider,
+                model: current,
+            } => {
                 // A saved connection is not proof the files are still there. One whose weights
                 // file has gone keeps the Set up link, so the model can be installed again.
                 let saved: Vec<&ModelInfo> = store
@@ -161,7 +165,7 @@ pub(crate) fn unset_groups(
                             && c.id.as_str() == native_connection_id(feature, provider)
                     })
                     .flat_map(|c| &c.models)
-                    .filter(|m| fits(role, m).is_some())
+                    .filter(|m| fits(role, m).is_some() && m.id.as_str() == current)
                     .collect();
                 if saved.iter().any(|m| {
                     m.local_file

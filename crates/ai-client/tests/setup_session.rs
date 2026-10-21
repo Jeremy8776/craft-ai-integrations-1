@@ -169,6 +169,48 @@ fn a_checked_result_is_dropped_when_discovery_picks_another_directory() {
     );
 }
 
+/// A late answer for the directory a review has moved away from cannot bring its result back.
+/// The request is still the running one, so its ticket is accepted, but the result is not kept.
+#[test]
+fn a_late_result_for_a_directory_the_review_moved_from_is_not_kept() {
+    let (dir, desk, plan) = prepared();
+    let destination = plan.destination().unwrap().to_owned();
+    std::fs::create_dir_all(&destination).unwrap();
+    for (i, file) in plan.route().models.iter().enumerate() {
+        std::fs::write(destination.join(&file.filename), vec![b'x'; i + 1]).unwrap();
+    }
+    let mut session = SetupSession::new(
+        desk.prepare_native_setup(&feature(), "candle", &app(&dir))
+            .unwrap(),
+    );
+    session.accept_licences(true);
+    let request = session.begin(SetupTask::Download).unwrap();
+    let result = request.run(
+        &craft_ai_comfy_env::Downloader::new(Default::default()),
+        None,
+        &mut |_, _| {},
+    );
+    assert!(result.is_ok());
+    // Discovery now prefers a complete copy elsewhere, while the old request is still unanswered.
+    let elsewhere = dir.path().join("models").join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    for (i, file) in plan.route().models.iter().enumerate() {
+        std::fs::write(elsewhere.join(&file.filename), vec![b'x'; i + 1]).unwrap();
+    }
+    std::fs::remove_dir_all(&destination).unwrap();
+    let later = desk
+        .prepare_native_setup(&feature(), "candle", &app(&dir))
+        .unwrap();
+    assert_eq!(later.existing_directory(), Some(elsewhere.as_path()));
+    assert_eq!(session.review(later), None, "the request keeps running");
+    assert!(session.complete(request.ticket(), result));
+    assert!(
+        session.checked().is_none(),
+        "the old directory is not offered"
+    );
+    assert_eq!(session.problem(), None, "a late answer is not an error");
+}
+
 /// A plan for other files (another route for the same tool) is a different target: the approval
 /// goes and the running worker is cancelled.
 #[test]

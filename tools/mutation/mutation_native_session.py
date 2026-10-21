@@ -19,4 +19,5 @@ NQ = [
     ('native-target-ignores-the-destination', 'crates/ai-client/src/folders/setup.rs', '            && self.destination == other.destination\n', '', 'craft-ai-client', 'setup_session', 'changing_the_destination'),
     ('native-target-ignores-the-tool-and-runtime', 'crates/ai-client/src/folders/setup.rs', '        self.feature == other.feature\n            && self.route == other.route\n', '        true\n', 'craft-ai-client', 'setup_session', 'a_different_route'),
     ('native-checked-kept-for-another-directory', 'crates/ai-client/src/setup_flow.rs', '.is_some_and(|checked| checked.weights().parent() != current)', '.is_some_and(|_| false)', 'craft-ai-client', 'setup_session', 'another_directory'),
+    ('native-late-result-kept-for-another-directory', 'crates/ai-client/src/setup_flow.rs', 'self.checked = current.then_some(checked);', 'self.checked = Some(checked);', 'craft-ai-client', 'setup_session', 'late_result_for_a_directory'),
 ]

@@ -151,7 +151,7 @@ impl SetupSession {
             self.plan = plan;
             // A checked result belongs to the directory it was checked in. Keep it only while
             // that is still where the plan's files are (or would go).
-            let current = self.plan.existing_directory().or(self.plan.destination());
+            let current = self.current_directory();
             if self
                 .checked
                 .as_ref()
@@ -168,6 +168,11 @@ impl SetupSession {
         self.problem = None;
         self.progress = None;
         previous
+    }
+    /// Where the plan's files are, or would go: the directory that already holds them, else the
+    /// download destination. A checked result is kept only for this directory.
+    fn current_directory(&self) -> Option<&std::path::Path> {
+        self.plan.existing_directory().or(self.plan.destination())
     }
     /// Consumes approval and returns a worker request, never performs I/O on the drawing thread.
     pub fn begin(&mut self, task: SetupTask) -> Option<SetupRequest> {
@@ -226,7 +231,10 @@ impl SetupSession {
                     && checked.provider() == active.plan.route().provider
                     && expected.as_deref() == Some(checked.weights()) =>
             {
-                self.checked = Some(checked)
+                // A late answer for a directory the review has moved away from is dropped
+                // quietly: it is not an error, and the old directory is not offered.
+                let current = checked.weights().parent() == self.current_directory();
+                self.checked = current.then_some(checked);
             }
             Ok(_) => {
                 self.checked = None;
