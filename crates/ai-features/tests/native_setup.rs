@@ -89,8 +89,10 @@ fn setup_options_offer_candle_with_its_own_size_but_not_unbuilt_burn() {
         .iter()
         .find(|o| o.id == "native:select-subject:candle")
         .unwrap();
-    assert!(matches!(&candle.route, Route::Native { feature, provider }
-        if feature == "select-subject" && provider == "candle"));
+    assert!(
+        matches!(&candle.route, Route::Native { feature, provider, model }
+        if feature == "select-subject" && provider == "candle" && model == "sam3")
+    );
     assert_eq!(candle.size_bytes, Some(3_441_325_459));
     assert!(candle.usable);
     assert!(options.iter().all(|o| o.id != "native:select-subject:burn"));
