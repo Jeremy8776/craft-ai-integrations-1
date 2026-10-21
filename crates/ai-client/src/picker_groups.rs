@@ -146,11 +146,19 @@ pub(crate) fn unset_groups(
                     "Not installed. Runs on this computer.".to_owned(),
                 )
             }
-            Route::Native { provider, .. } => {
+            Route::Native {
+                provider,
+                model: current,
+                ..
+            } => {
+                // Only a connection that has this option's own model stands for it; another model
+                // of the same runtime does not.
                 if store.connections.iter().any(|c| {
                     c.provider == *provider
                         && c.locality == Locality::Local
-                        && c.models.iter().any(|m| fits(role, m).is_some())
+                        && c.models
+                            .iter()
+                            .any(|m| fits(role, m).is_some() && m.id.as_str() == current)
                 }) {
                     continue;
                 }
