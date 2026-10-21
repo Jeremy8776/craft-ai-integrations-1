@@ -16,7 +16,13 @@ pub enum Route {
     /// `recipe` is the workflow id of the model to set up, such as `sam3-segment`.
     Local { feature: String, recipe: String },
     /// Run a model in an app without ComfyUI. The engine has its own model files.
-    Native { feature: String, provider: String },
+    Native {
+        feature: String,
+        provider: String,
+        /// The model id the runtime's connection carries, so a saved connection for another model
+        /// of the same runtime is not mistaken for this one.
+        model: String,
+    },
     /// Connect a hosted service. `preset` is a key of `craft_ai_core::PRESETS`.
     Service { preset: String },
 }
@@ -74,6 +80,7 @@ pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
                     route: Route::Native {
                         feature: feature.id.clone(),
                         provider: native.provider.clone(),
+                        model: native.model.clone(),
                     },
                     unlocks: vec![feature.id.clone()],
                     usable: true,
