@@ -382,6 +382,10 @@ fn a_built_in_offer_agrees_to_its_own_words_not_the_comfyui_ones() {
         "{text}"
     );
     assert!(text.contains("model folder"), "{text}");
+    // The built-in flow's control is Download, so that is the click the terms name.
+    assert!(!text.contains("Install"), "{text}");
+    assert!(offer.agreement.summary.contains("Download"));
+    assert!(!offer.agreement.summary.contains("Install"));
     assert_ne!(offer.agreement.version, agreement().version);
     assert_eq!(
         offer.agreement.full_text,
