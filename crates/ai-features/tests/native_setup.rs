@@ -108,3 +108,60 @@ fn a_recipe_apps_cannot_run_yet_offers_no_native_download() {
     assert_eq!(plan.state, State::NoLocalRoute);
     assert!(plan.missing_files.is_empty());
 }
+
+/// `select-subject` with a recipe that cannot run listed before the real one, and a later copy of
+/// the real one under another workflow id. Only the first usable recipe may serve a built-in
+/// runtime, the same one `enable_native` and engine advice use.
+fn unusable_first() -> craft_ai_features::Feature {
+    let mut feature = builtin()
+        .into_iter()
+        .find(|f| f.id == "select-subject")
+        .unwrap();
+    let real = feature.locals[0].clone();
+    let mut parked = real.clone();
+    parked.usable = false;
+    parked.workflow = "parked".to_owned();
+    let mut later = real.clone();
+    later.workflow = "later".to_owned();
+    feature.locals = vec![parked, real, later];
+    feature
+}
+
+/// An unusable recipe in front does not hide the usable one behind it.
+#[test]
+fn plan_native_uses_the_first_usable_recipe_not_the_first_recipe() {
+    let feature = unusable_first();
+    let plan = plan_native(&feature, "candle", &Inventory::default());
+    assert_eq!(plan.state, State::NeedsInstall);
+    assert_eq!(plan.recipe, feature.locals[1].workflow);
+    assert_eq!(plan.download_bytes, 3_441_325_459);
+}
+
+/// A runtime gets one option however many recipes name it, and the option is the one the planner
+/// and the installer act on, so its id is unique and following it cannot fail.
+#[test]
+fn a_native_runtime_gets_one_option_from_the_first_usable_recipe() {
+    let feature = unusable_first();
+    let options = setup_options(std::slice::from_ref(&feature));
+    let native: Vec<_> = options
+        .iter()
+        .filter(|o| matches!(o.route, Route::Native { .. }))
+        .collect();
+    assert_eq!(native.len(), 1);
+    assert_eq!(native[0].id, "native:select-subject:candle");
+    assert!(native[0].usable);
+    assert_eq!(native[0].size_bytes, Some(3_441_325_459));
+}
+
+/// With no usable recipe at all, no native option is offered.
+#[test]
+fn no_native_option_without_a_usable_recipe() {
+    let mut feature = unusable_first();
+    feature.locals.iter_mut().for_each(|r| r.usable = false);
+    let options = setup_options(std::slice::from_ref(&feature));
+    assert!(
+        options
+            .iter()
+            .all(|o| !matches!(o.route, Route::Native { .. }))
+    );
+}

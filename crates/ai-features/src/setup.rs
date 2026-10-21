@@ -240,7 +240,11 @@ fn offer_for(
     route: SetupRoute,
     selected_provider: Option<&str>,
 ) -> Option<SetupOffer> {
-    let recipe = feature.locals.first().filter(|r| r.usable)?;
+    let recipe = if route == SetupRoute::BuiltIn {
+        feature.first_usable_recipe()?
+    } else {
+        feature.locals.first().filter(|r| r.usable)?
+    };
     // The built-in route compares the runtime's own files: the named one, or else the first
     // runtime that names files at all.
     let native = if route == SetupRoute::BuiltIn {
