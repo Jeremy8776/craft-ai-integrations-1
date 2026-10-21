@@ -34,5 +34,5 @@ pub use recipe::{
 pub use sample::{sample_is_costly, sample_request};
 pub use setup::{
     Agreement, COMFYUI_TAG, PortableBuild, SetupOffer, SetupRoute, SetupStep, StepKind, agreement,
-    gigabytes, is_official_build, portable_for, setup_offer, setup_offer_native,
+    agreement_for, gigabytes, is_official_build, portable_for, setup_offer, setup_offer_native,
 };
