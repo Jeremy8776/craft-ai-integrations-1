@@ -17,4 +17,5 @@ NF = [
     ('native-offer-ignores-the-provider', F + 'setup.rs', 'selected_provider.is_none_or(|provider| n.provider == provider)', 'true', FE, 'setup', 'selected_provider'),
     ('built-in-offer-compares-comfyui-files', F + 'setup.rs', 'let compared = if let Some(native) = native {', 'let compared = if let Some(native) = native.filter(|_| false) {', FE, 'setup', 'needs_only_the_model'),
     ('option-offered-for-a-route-without-files', F + 'options.rs', 'for native in recipe.native.iter().filter(|n| !n.models.is_empty()) {', 'for native in recipe.native.iter() {', FE, 'native_setup', 'not_unbuilt_burn'),
+    ('native-options-before-later-locals', F + 'options.rs', 'locals.extend(natives);', 'locals.splice(0..0, natives);', FE, 'native_setup', 'follow_every_local'),
 ]

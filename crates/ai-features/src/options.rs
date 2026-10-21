@@ -41,11 +41,12 @@ pub struct SetupOption {
     pub size_bytes: Option<u64>,
 }
 
-/// Every local model first, one per recipe in catalogue order, each tool's built-in runtimes
-/// (one per runtime, from its first usable recipe) after its models, then hosted services in the
-/// order the features first name them.
+/// Every local model first, one per recipe in catalogue order, then every tool's built-in
+/// runtimes (one per runtime, from its first usable recipe), then hosted services in the order the
+/// features first name them.
 pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
     let mut locals = Vec::new();
+    let mut natives = Vec::new();
     let mut services: Vec<SetupOption> = Vec::new();
     for feature in features {
         for recipe in &feature.locals {
@@ -66,7 +67,7 @@ pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
         // file setup use, so each runtime gets one option and following it cannot fail.
         if let Some(recipe) = feature.first_usable_recipe() {
             for native in recipe.native.iter().filter(|n| !n.models.is_empty()) {
-                locals.push(SetupOption {
+                natives.push(SetupOption {
                     id: format!("native:{}:{}", feature.id, native.provider),
                     title: native.label.clone(),
                     note: String::new(),
@@ -105,6 +106,7 @@ pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
             }
         }
     }
+    locals.extend(natives);
     locals.extend(services);
     locals
 }
