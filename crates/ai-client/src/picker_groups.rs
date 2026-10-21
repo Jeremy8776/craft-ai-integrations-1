@@ -98,6 +98,7 @@ pub(crate) fn connection_groups(
 /// Providers that could do the tool and are not set up, greyed rather than hidden. A model that
 /// can be downloaded but has no workflow to run it yet is not offered.
 pub(crate) fn unset_groups(
+    client: &AiClient,
     store: &StoreFile,
     role: &Role,
     options: &[SetupOption],
@@ -107,7 +108,7 @@ pub(crate) fn unset_groups(
         .iter()
         .filter(|o| o.usable && o.unlocks.iter().any(|u| u == role.id.as_str()))
     {
-        let (locality, note) = match &option.route {
+        let (locality, state, note) = match &option.route {
             Route::Service { preset } => {
                 let Some(preset) = PRESETS.iter().find(|p| p.key == preset) else {
                     continue;
@@ -119,13 +120,18 @@ pub(crate) fn unset_groups(
                 {
                     continue;
                 }
-                (None, format!("Not connected. {}", option.note))
+                (
+                    None,
+                    GroupState::NotSetUp,
+                    format!("Not connected. {}", option.note),
+                )
             }
             Route::Local { feature, recipe } => {
                 // A connection a recipe registered stands for that recipe only; any other local
                 // connection still counts for every model, as before.
                 let have_local = store.connections.iter().any(|c| {
-                    c.locality == Locality::Local
+                    c.provider == "comfyui"
+                        && c.locality == Locality::Local
                         && c.models.iter().any(|m| {
                             fits(role, m).is_some()
                                 && (!is_recipe_connection(c, feature) || m.id.as_str() == recipe)
@@ -136,18 +142,41 @@ pub(crate) fn unset_groups(
                 }
                 (
                     Some(Locality::Local),
+                    GroupState::NotSetUp,
                     "Not installed. Runs on this computer.".to_owned(),
                 )
+            }
+            Route::Native { provider, .. } => {
+                if store.connections.iter().any(|c| {
+                    c.provider == *provider
+                        && c.locality == Locality::Local
+                        && c.models.iter().any(|m| fits(role, m).is_some())
+                }) {
+                    continue;
+                }
+                if client.has_adapter(provider) {
+                    (
+                        Some(Locality::Local),
+                        GroupState::NotSetUp,
+                        "Not installed. Runs on this computer.".to_owned(),
+                    )
+                } else {
+                    (
+                        Some(Locality::Local),
+                        GroupState::NeedsAdapter,
+                        "This app can't use this option yet.".to_owned(),
+                    )
+                }
             }
         };
         groups.push(PickerGroup {
             title: option.title.clone(),
             locality,
-            state: GroupState::NotSetUp,
+            state,
             note: note.trim_end().to_owned(),
             models: Vec::new(),
             suggested: false,
-            setup: Some(SetupLink::New {
+            setup: (state != GroupState::NeedsAdapter).then(|| SetupLink::New {
                 option: option.id.clone(),
             }),
             size_bytes: option.size_bytes,
