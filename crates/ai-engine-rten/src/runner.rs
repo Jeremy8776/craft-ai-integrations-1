@@ -84,14 +84,14 @@ fn model_id() -> ModelId {
 }
 
 /// The model in memory, and the last picture it looked at.
-pub(crate) struct Loaded<B: Backend> {
+pub struct Loaded<B: Backend> {
     backend: B,
     last: Option<(u64, B::Features)>,
 }
 
 impl<B: Backend> Loaded<B> {
     /// Wraps a backend with no picture looked at yet.
-    pub(crate) fn new(backend: B) -> Self {
+    pub fn new(backend: B) -> Self {
         Self {
             backend,
             last: None,
@@ -179,7 +179,7 @@ impl<B: Backend + 'static> LoadedModel for Loaded<B> {
 
 /// Reads the clicks and the box, and refuses a request that asks for words or gives neither a
 /// click on the object nor a box.
-pub(crate) fn read_prompt(request: &Request) -> Result<(Vec<Click>, Option<Area>), AiError> {
+pub fn read_prompt(request: &Request) -> Result<(Vec<Click>, Option<Area>), AiError> {
     if segment::description(request).is_some() {
         return Err(AiError::unsupported(
             "This option selects by clicking on the picture. To select by describing it, choose another in Set up AI.",

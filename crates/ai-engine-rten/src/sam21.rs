@@ -27,7 +27,7 @@ pub const DECODER_FILE: &str = "decoder.onnx";
 /// The decoder's mask proposals: one from a single prediction, three from the multi-mask head.
 const PROPOSALS: usize = 4;
 
-pub(crate) use craft_ai_core::segment::{Area, Click};
+pub use craft_ai_core::segment::{Area, Click};
 
 /// The decoder's point labels for the two corners of a box.
 const BOX_TOP_LEFT: i32 = 2;
@@ -35,13 +35,13 @@ const BOX_BOTTOM_RIGHT: i32 = 3;
 
 /// The mask the model is most sure of, as logits over the 256 square, and how sure it is.
 #[derive(Clone, Debug)]
-pub(crate) struct Prediction {
+pub struct Prediction {
     pub logits: Vec<f32>,
     pub score: f32,
 }
 
 /// What the runner needs from a model: look at a picture once, then answer clicks on it.
-pub(crate) trait Backend: Send {
+pub trait Backend: Send {
     /// What looking at a picture leaves behind, kept so a second click on it is quick.
     type Features: Send;
 
@@ -123,7 +123,7 @@ impl Rten {
 /// The decoder's prompt points: each click, then the two corners of a box if there is one.
 /// Coordinates are in pixels of the 1024 square, with no half-pixel shift, as the export expects.
 /// Labels are 1 for a click on the object, 0 for a click off it, 2 and 3 for the box corners.
-pub(crate) fn prompt_points(clicks: &[Click], area: Option<Area>) -> (Vec<f32>, Vec<i32>) {
+pub fn prompt_points(clicks: &[Click], area: Option<Area>) -> (Vec<f32>, Vec<i32>) {
     let mut coords = Vec::with_capacity((clicks.len() + 2) * 2);
     let mut labels = Vec::with_capacity(clicks.len() + 2);
     let mut push = |x: f32, y: f32, label: i32| {
@@ -143,7 +143,7 @@ pub(crate) fn prompt_points(clicks: &[Click], area: Option<Area>) -> (Vec<f32>, 
 
 /// The index of the proposal the model rates highest, ignoring scores that are not numbers; the
 /// first when none is usable.
-pub(crate) fn best_proposal(scores: &[f32]) -> usize {
+pub fn best_proposal(scores: &[f32]) -> usize {
     scores
         .iter()
         .enumerate()

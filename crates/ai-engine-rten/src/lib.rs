@@ -32,5 +32,9 @@ pub mod resample;
 mod runner;
 mod sam21;
 
-pub use runner::{ENGINE, MODEL, Sam21Runner, runners};
-pub use sam21::{DECODER_FILE, ENCODER_FILE};
+// What another engine needs to answer the same request with its own runtime: the request
+// handling is [`Loaded`] over a [`Backend`], so only the model run differs.
+pub use runner::{ENGINE, Loaded, MODEL, Sam21Runner, read_prompt, runners};
+pub use sam21::{
+    Area, Backend, Click, DECODER_FILE, ENCODER_FILE, Prediction, best_proposal, prompt_points,
+};
