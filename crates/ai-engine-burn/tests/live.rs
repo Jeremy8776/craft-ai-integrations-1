@@ -172,3 +172,41 @@ fn a_truncated_real_weights_file_is_an_error() {
         .unwrap();
     assert!(error.message.contains("Set up AI"), "{}", error.message);
 }
+
+/// Loading from the downloaded files prepares the saved copy beside the model folder, once: the
+/// first load converts, the second only checks hashes, and the copy the runner reads is the one in
+/// `burn-prepared`.
+#[test]
+fn loading_the_downloaded_files_prepares_once_beside_the_model_folder() {
+    let Some(onnx) = std::env::var_os("CRAFT_TEST_SAM21_ONNX_DIR").map(PathBuf::from) else {
+        return;
+    };
+    let root = tempfile::tempdir().unwrap();
+    let models = root.path().join("models");
+    std::fs::create_dir_all(&models).unwrap();
+    for name in ["encoder.onnx", "decoder.onnx"] {
+        std::fs::copy(onnx.join(name), models.join(name)).unwrap();
+    }
+    let started = Instant::now();
+    craft_ai_engine_burn::Sam21Runner
+        .load(&models.join("encoder.onnx"))
+        .unwrap();
+    let first = started.elapsed();
+    let saved = root.path().join("burn-prepared");
+    // The saved copy sits in a folder named for the source files and converter revision.
+    let copies: Vec<_> = std::fs::read_dir(&saved)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.join("encoder.bpk").is_file() && p.join("decoder.bpk").is_file())
+        .collect();
+    assert_eq!(copies.len(), 1, "one saved copy in {saved:?}");
+    assert!(
+        !models.join("encoder.bpk").exists(),
+        "nothing is written into the model folder"
+    );
+    let started = Instant::now();
+    craft_ai_engine_burn::Sam21Runner
+        .load(&models.join("encoder.onnx"))
+        .unwrap();
+    eprintln!("prepare+load {first:?}, reuse+load {:?}", started.elapsed());
+}

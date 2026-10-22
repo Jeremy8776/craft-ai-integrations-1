@@ -2115,6 +2115,7 @@ version = "0.1.0"
 dependencies = [
  "burn",
  "burn-store",
+ "craft-ai-burn-setup",
  "craft-ai-core",
  "craft-ai-engine",
  "craft-ai-engine-rten",

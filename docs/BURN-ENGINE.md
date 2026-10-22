@@ -16,9 +16,14 @@ The pieces, and which crate owns each:
 | The cargo feature | `craft-ai-client` feature `burn` |
 
 Nothing converted is hosted. The saved weights (`encoder.bpk`, `decoder.bpk`) are made on the
-person's computer, once, and shared by every app. The runner refuses the original `encoder.onnx`
-with a plain "prepare it first" message, because turning one into the other is the host's step
-(approval and progress), not the runner's.
+person's computer, once, and shared by every app. Given the downloaded `encoder.onnx` (with
+`decoder.onnx` beside it), the runner prepares the saved copy itself: it calls the setup crate,
+which checks the exact source bytes, then writes `burn-prepared/` beside the model folder (never
+inside it) and loads from there. Later loads only check hashes. The converter cannot be
+interrupted and `load` has no Cancel handle, so the first load runs to the end (seconds on the
+test PC, to be measured on a clean machine). Any other `.onnx` is refused in plain words. The
+`prepare` cargo feature of `craft-ai-engine-burn` (on by default) bundles the converter; with it
+off, a downloaded file is answered with "open Set up AI".
 
 ## Regenerating the architecture
 
@@ -74,8 +79,12 @@ python tools/mutation/mutation_check.py be
 - SAM 2.1 tiny only. A different architecture needs its own generated code and runner.
 - Click and box prompts. A description stays on the ComfyUI route.
 - The processor fallback uses Burn's `ndarray` backend, which Burn has marked deprecated in favour
-  of `burn-flex`. It is the backend the parity was measured on; swap it once flex is measured.
+  of `burn-flex`. Swap it once flex is measured.
+- `CRAFT_AI_BURN_DEVICE=cpu` forces the processor even when a graphics card answers. Run on the
+  test PC (release, astronaut sample): one click and one box both gave IoU 1.0000 against rten
+  (22.5 % selected by both). Timings on the processor: first run 8.70 s (rten 0.71 s), second
+  click on the same picture 1.78 s (rten 0.030 s). Usable, but the card is the point of this engine.
 - A few generated `forward` functions are 500 to 699 lines because a function cannot be split
   without tracking every value that passes between the halves. No file is 700 lines or more.
-- The host step that turns a downloaded `encoder.onnx` into a saved copy and records `encoder.bpk`
-  as the weights file is not built here.
+- Progress and Cancel during the first preparation: `load` has neither, so the app shows its own
+  busy state until the first selection returns.

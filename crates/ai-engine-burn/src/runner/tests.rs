@@ -135,9 +135,11 @@ fn the_runner_is_the_burn_sam21_the_catalogue_names() {
     assert_eq!(runners().len(), 1);
 }
 
-/// The published ONNX file is not what this engine reads: it is told to prepare, in plain words.
+/// The downloaded ONNX file is not what this engine reads, and it is not the supported export
+/// either: the engine refuses it in plain words (no path, no crash) instead of converting it.
+#[cfg(feature = "prepare")]
 #[test]
-fn the_original_onnx_file_is_answered_with_what_to_do() {
+fn an_onnx_file_that_is_not_the_supported_export_is_refused_plainly() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("encoder.onnx"), b"x").unwrap();
     std::fs::write(dir.path().join("decoder.onnx"), b"x").unwrap();
@@ -147,12 +149,55 @@ fn the_original_onnx_file_is_answered_with_what_to_do() {
         .unwrap();
     assert_eq!(error.kind, ErrorKind::Unsupported);
     assert!(
-        error
-            .message
-            .contains("prepare SAM 2.1 on this computer first"),
+        !error.message.contains(dir.path().to_str().unwrap()),
         "{}",
         error.message
     );
+    assert!(!error.message.is_empty());
+    // The refusal is about the files: not the stale "prepared files" answer, and not about where the
+    // saved copy would go.
+    assert!(!error.message.contains("encoder.bpk"), "{}", error.message);
+    assert!(
+        !error.message.contains("separate folder"),
+        "{}",
+        error.message
+    );
+    // Nothing was written beside the folder.
+    assert!(
+        !dir.path()
+            .parent()
+            .unwrap()
+            .join("burn-prepared")
+            .join("encoder.bpk")
+            .exists()
+    );
+}
+
+/// With the converter left out of the build, a downloaded file is answered with where to go.
+#[cfg(not(feature = "prepare"))]
+#[test]
+fn without_the_converter_a_downloaded_file_says_to_open_set_up() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("encoder.onnx"), b"x").unwrap();
+    let error = Sam21Runner
+        .load(&dir.path().join("encoder.onnx"))
+        .err()
+        .unwrap();
+    assert!(error.message.contains("Set up AI"), "{}", error.message);
+}
+
+/// A downloaded encoder with no decoder beside it says which files are needed.
+#[cfg(feature = "prepare")]
+#[test]
+fn a_downloaded_encoder_with_no_decoder_says_what_is_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("encoder.onnx"), b"x").unwrap();
+    let error = Sam21Runner
+        .load(&dir.path().join("encoder.onnx"))
+        .err()
+        .unwrap();
+    assert_eq!(error.kind, ErrorKind::Unsupported);
+    assert!(error.message.contains("decoder.onnx"), "{}", error.message);
     assert!(error.message.contains("Set up AI"), "{}", error.message);
 }
 

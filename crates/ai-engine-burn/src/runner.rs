@@ -6,8 +6,8 @@
 //! says which engine and model this is and how to load its weights.
 //!
 //! The weights are not the published ONNX files. They are the saved copy that
-//! `craft-ai-burn-setup` makes once on this computer, so asking this runner to load an `.onnx`
-//! file is answered with what to do, not with a guess.
+//! `craft-ai-burn-setup` makes once on this computer. Given the downloaded `encoder.onnx`, this
+//! runner prepares that copy itself (see `prepare`), then loads it.
 
 use std::ffi::OsStr;
 use std::path::Path;
@@ -71,9 +71,8 @@ impl ModelRunner for Sam21Runner {
     /// what to do otherwise.
     fn load(&self, weights: &Path) -> Result<Box<dyn LoadedModel>, AiError> {
         if weights.file_name() == Some(OsStr::new("encoder.onnx")) {
-            return Err(AiError::unsupported(
-                "This option has to prepare SAM 2.1 on this computer first. Open Set up AI to do it.",
-            ));
+            let dir = prepare::prepared_folder(weights)?;
+            return Ok(Box::new(Loaded::new(Burn::load(&dir)?)));
         }
         let dir = weights
             .parent()
@@ -92,6 +91,8 @@ impl ModelRunner for Sam21Runner {
 fn model_id() -> ModelId {
     ModelId::new(MODEL).expect("sam21 is a valid model id")
 }
+
+mod prepare;
 
 #[cfg(test)]
 mod tests;
