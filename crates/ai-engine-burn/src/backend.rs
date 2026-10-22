@@ -86,9 +86,15 @@ pub fn graphics_card_answers() -> bool {
     answers == Some(true)
 }
 
-/// The graphics card when one answers, else the processor.
+/// Set to `cpu` to make this engine use the processor even when a graphics card answers (to
+/// compare the two, or to work around a card that misbehaves).
+pub const DEVICE_ENV: &str = "CRAFT_AI_BURN_DEVICE";
+
+/// The graphics card when one answers, else the processor. `CRAFT_AI_BURN_DEVICE=cpu` forces the
+/// processor.
 fn pick_device() -> Device {
-    if graphics_card_answers() {
+    let forced_processor = std::env::var_os(DEVICE_ENV).is_some_and(|v| v == "cpu");
+    if !forced_processor && graphics_card_answers() {
         return WgpuDevice::default().into();
     }
     #[allow(deprecated)]
