@@ -12,6 +12,7 @@ publish = false
 [dependencies]
 craft-ai-core.workspace = true
 craft-ai-engine = { path = "../ai-engine", package = "craft-ai-engine" }
+craft-ai-features = { path = "../ai-features", package = "craft-ai-features" }
 # The request handling (clicks, box, the picture kept between requests, the empty-mask answer),
 # picture decoding and resampling are engine-neutral and live there once.
 craft-ai-engine-rten = { path = "../ai-engine-rten", package = "craft-ai-engine-rten" }
