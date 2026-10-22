@@ -26,3 +26,7 @@ workspace = true
 [[example]]
 name = "prepare_sam21"
 required-features = ["conversion"]
+
+[[example]]
+name = "generate_architecture"
+required-features = ["conversion"]

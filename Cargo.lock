@@ -1150,6 +1150,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4e7494d1142d945c9f1bd88b9aa68e4af7b190482e8cff47011d338057d857b"
 dependencies = [
  "burn-core",
+ "burn-cubecl",
  "burn-fusion",
  "burn-std",
  "num-traits",
@@ -1254,6 +1255,7 @@ checksum = "3afcc7d0f8654ccf9529c9e93f21383b8828d4c784c0429966d2026698f72451"
 dependencies = [
  "burn-autodiff",
  "burn-core",
+ "burn-cubecl",
  "burn-flex",
  "burn-fusion",
  "burn-std",
@@ -1298,6 +1300,7 @@ dependencies = [
  "half",
  "hashbrown 0.16.1",
  "memmap2",
+ "pytorch-reader",
  "regex",
  "safetensors 0.8.0",
  "textdistance",
@@ -1343,8 +1346,10 @@ dependencies = [
  "aligned-vec",
  "bon",
  "burn-core",
+ "burn-cubecl",
  "burn-std",
  "bytemuck",
+ "cubecl",
  "derive-new",
  "image",
  "macerator",
@@ -2105,6 +2110,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-ai-engine-burn"
+version = "0.1.0"
+dependencies = [
+ "burn",
+ "burn-store",
+ "craft-ai-core",
+ "craft-ai-engine",
+ "craft-ai-engine-rten",
+ "png",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "craft-ai-engine-candle"
 version = "0.1.0"
 dependencies = [
@@ -2839,6 +2858,7 @@ dependencies = [
  "cubecl",
  "cubek-attention",
  "cubek-convolution",
+ "cubek-fft",
  "cubek-interpolate",
  "cubek-matmul",
  "cubek-pool",
@@ -2878,6 +2898,15 @@ dependencies = [
  "cubek-tile",
  "half",
  "serde",
+]
+
+[[package]]
+name = "cubek-fft"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48451902f1d21d3eb88cadc17a8a7aeb3b582f17484a68e650f44efe74688b73"
+dependencies = [
+ "cubecl",
 ]
 
 [[package]]
@@ -5617,6 +5646,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
+name = "nix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+dependencies = [
+ "bitflags 2.13.2",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
+
+[[package]]
 name = "no_std_io2"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6828,6 +6869,21 @@ name = "pxfm"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
+
+[[package]]
+name = "pytorch-reader"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2df070f467f9d2acae7a4c639b0c8827be51d97d24fd6c14c133ddcdeafcc44"
+dependencies = [
+ "byteorder",
+ "crc32fast",
+ "num-traits",
+ "serde",
+ "tar",
+ "thiserror 2.0.21",
+ "zip 9.0.5",
+]
 
 [[package]]
 name = "qoi"
@@ -10219,6 +10275,20 @@ dependencies = [
  "crc32fast",
  "indexmap",
  "memchr",
+ "typed-path",
+]
+
+[[package]]
+name = "zip"
+version = "9.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "indexmap",
+ "memchr",
+ "nix",
  "typed-path",
 ]
 
