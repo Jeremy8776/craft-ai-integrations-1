@@ -19,7 +19,7 @@ use burn::backend::ndarray::NdArrayDevice;
 use burn::backend::wgpu::WgpuDevice;
 use burn::prelude::*;
 use burn::tensor::TensorData;
-use burn_store::{BurnpackStore, ModuleSnapshot};
+use burn_store::{ApplyResult, BurnpackStore, ModuleSnapshot};
 use craft_ai_core::{AiError, ErrorKind};
 use craft_ai_engine_rten::resample::{MASK_SIDE, SIDE};
 use craft_ai_engine_rten::{Area, Backend, Click, Prediction, best_proposal, prompt_points};
@@ -96,12 +96,19 @@ fn pick_device() -> Device {
     cpu.into()
 }
 
+/// Whether every weight of the model was set, with no error on the way. The store already refuses
+/// both with its default settings; this keeps a changed setting or a newer store from letting a
+/// half-loaded model run.
+fn fully_applied(result: &ApplyResult) -> bool {
+    result.is_success() && result.missing.is_empty()
+}
+
 /// Fills `model` from the saved file at `path`, refusing a file that is damaged, belongs to
 /// another model or leaves any weight unset.
 fn fill<M: ModuleSnapshot>(mut model: M, path: &Path) -> Result<M, AiError> {
     let mut store = BurnpackStore::from_file(path);
     match guarded(|| model.load_from(&mut store)) {
-        Some(Ok(applied)) if applied.is_success() && applied.missing.is_empty() => Ok(model),
+        Some(Ok(applied)) if fully_applied(&applied) => Ok(model),
         _ => Err(unreadable()),
     }
 }

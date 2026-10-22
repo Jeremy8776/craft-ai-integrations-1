@@ -1,3 +1,5 @@
+use burn::nn::{Linear, LinearConfig};
+
 use super::*;
 
 /// A folder holding a saved-weights-looking encoder and decoder with `body` after the first bytes.
@@ -118,4 +120,94 @@ fn a_damaged_weights_file_is_an_error_not_a_panic() {
     let error = Burn::load(dir.path()).err().unwrap();
     assert_eq!(error.kind, ErrorKind::Unsupported);
     assert_plain(&error);
+}
+
+/// A model of one layer, and a larger one of two, to stand in for weights that fit and weights
+/// that do not. Their loading goes through the same `fill` as the real encoder and decoder.
+#[derive(Module, Debug)]
+struct Small {
+    first: Linear,
+}
+
+#[derive(Module, Debug)]
+struct Bigger {
+    first: Linear,
+    second: Linear,
+}
+
+/// The processor, so these tests need no graphics card.
+fn cpu() -> Device {
+    #[allow(deprecated)]
+    let cpu = NdArrayDevice::Cpu;
+    cpu.into()
+}
+
+/// A saved copy of a one-layer model with `inputs` by `inputs` weights, in a new folder.
+fn saved_small(inputs: usize) -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("small.bpk");
+    let model = Small {
+        first: LinearConfig::new(inputs, inputs).init(&cpu()),
+    };
+    let mut store = BurnpackStore::from_file(&path).overwrite(true);
+    model.save_into(&mut store).unwrap();
+    (dir, path)
+}
+
+/// Weights that fit the model are loaded.
+#[test]
+fn weights_that_fit_are_loaded() {
+    let (_dir, path) = saved_small(2);
+    let empty = Small {
+        first: LinearConfig::new(2, 2).init(&cpu()),
+    };
+    assert!(fill(empty, &path).is_ok());
+}
+
+/// A saved copy that leaves part of the model without weights is refused, not run half empty.
+#[test]
+fn weights_that_leave_part_of_the_model_unset_are_refused() {
+    let (_dir, path) = saved_small(2);
+    let bigger = Bigger {
+        first: LinearConfig::new(2, 2).init(&cpu()),
+        second: LinearConfig::new(2, 2).init(&cpu()),
+    };
+    let error = fill(bigger, &path).err().unwrap();
+    assert_eq!(error.kind, ErrorKind::Unsupported);
+    assert_plain(&error);
+}
+
+/// A saved copy whose weights have another shape belongs to another model and is refused.
+#[test]
+fn weights_of_another_shape_are_refused() {
+    let (_dir, path) = saved_small(3);
+    let other = Small {
+        first: LinearConfig::new(2, 2).init(&cpu()),
+    };
+    assert_plain(&fill(other, &path).err().unwrap());
+}
+
+/// A load result with nothing missing and no error is complete; one that is missing a weight, or
+/// had an error with all weights present, is not.
+#[test]
+fn a_load_that_left_a_weight_unset_or_failed_is_not_complete() {
+    let clean = ApplyResult {
+        applied: vec!["first.weight".into()],
+        skipped: Vec::new(),
+        missing: Vec::new(),
+        unused: Vec::new(),
+        errors: Vec::new(),
+    };
+    assert!(fully_applied(&clean));
+    let mut missing = clean.clone();
+    missing
+        .missing
+        .push(("second.weight".into(), "Struct:Bigger".into()));
+    assert!(!fully_applied(&missing));
+    let mut failed = clean.clone();
+    failed.errors.push(burn_store::ApplyError::LoadError {
+        path: "first.weight".into(),
+        message: "unreadable".into(),
+    });
+    assert!(!fully_applied(&failed));
 }

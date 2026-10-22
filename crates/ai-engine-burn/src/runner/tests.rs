@@ -146,7 +146,13 @@ fn the_original_onnx_file_is_answered_with_what_to_do() {
         .err()
         .unwrap();
     assert_eq!(error.kind, ErrorKind::Unsupported);
-    assert!(error.message.contains("prepare"), "{}", error.message);
+    assert!(
+        error
+            .message
+            .contains("prepare SAM 2.1 on this computer first"),
+        "{}",
+        error.message
+    );
     assert!(error.message.contains("Set up AI"), "{}", error.message);
 }
 

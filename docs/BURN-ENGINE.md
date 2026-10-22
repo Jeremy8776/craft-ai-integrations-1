@@ -1,0 +1,81 @@
+# The Burn engine (SAM 2.1, optional)
+
+`craft-ai-engine-burn` runs SAM 2.1 tiny for `image.segment` through Burn, on a graphics card when
+one answers and on the processor when none does. It is a choice beside rten, never the default:
+rten reads the publisher's ONNX files as they are and stays first in the recipe.
+
+The pieces, and which crate owns each:
+
+| Piece | Where |
+|---|---|
+| Request handling (clicks, box, the picture kept between requests, empty-mask answer, size checks) | `craft-ai-engine-rten` (`Loaded` over a `Backend`), shared by both engines |
+| The model run on Burn, weight loading, the panic guard | `craft-ai-engine-burn` |
+| The compiled architecture (generated) | `crates/ai-engine-burn/src/model/` |
+| One-time local conversion of the published ONNX files to saved weights | `craft-ai-burn-setup` (`docs/LOCAL-BURN-PREPARATION.md`) |
+| The catalogue route | `crates/ai-features/src/catalogue/sam21.rs` (a `burn` route after `rten`, same two published files) |
+| The cargo feature | `craft-ai-client` feature `burn` |
+
+Nothing converted is hosted. The saved weights (`encoder.bpk`, `decoder.bpk`) are made on the
+person's computer, once, and shared by every app. The runner refuses the original `encoder.onnx`
+with a plain "prepare it first" message, because turning one into the other is the host's step
+(approval and progress), not the runner's.
+
+## Regenerating the architecture
+
+The generated code is never edited by hand. It comes from one script, so a reviewer can rerun it:
+
+```sh
+python tools/burn/generate_sam21.py <folder holding encoder.onnx and decoder.onnx>
+python tools/burn/generate_sam21.py <folder> --check    # exit 1 if the tree is not what it makes
+```
+
+The script checks the two files against the sizes and SHA-256 pinned in `craft-ai-burn-setup`,
+runs the pinned `burn-onnx` (an example of that crate), applies five fixes to its output (each must
+match exactly the stated number of times, or the script stops), drops the generated loaders that
+panic on a bad file, splits by submodule so every file is under 700 lines, runs rustfmt and writes
+`src/model/`. The five fixes, all found on SAM 2.1 tiny with burn-onnx 0.22.0:
+
+1. An integer scalar divided by an Int tensor was emitted as a float divide (once, encoder).
+2. `one_hot` output rank was not inferred (once, decoder).
+3. A zero-length integer `ConstantOfShape` (Hiera's window padding is 0 when the size is a
+   multiple of the window), which Burn's `expand` refuses (five, encoder).
+4. The same for the float one, the decoder's empty box placeholder (three, decoder).
+5. `Where` with a condition that broadcasts: Burn's `mask_where` wants it at full size (five,
+   decoder).
+
+They are worth reporting upstream to `tracel-ai/burn-onnx`.
+
+### The revision rule
+
+`REVISION` (in the script) names the compiled architecture and the converter that made its weights.
+It is part of the saved-weights cache key in `crates/ai-burn-setup/src/sam21.rs`. Change it in both
+places, and regenerate, whenever any of these changes: the `burn-onnx` or Burn version, a patch in
+the script, or the source ONNX files. Saved weights made for an older revision are then never reused.
+`crates/ai-engine-burn/tests/revision.rs` fails if the script, the generated `model/mod.rs` and the
+cache key disagree.
+
+## Exercising it
+
+```sh
+# Unit tests with a fake backend (no model, no graphics card needed)
+cargo test -p craft-ai-engine-burn -j 8
+# Prepare the weights once, then the live comparison with rten (release; skipped without the variables)
+cargo run -p craft-ai-burn-setup --features conversion --example prepare_sam21 -- <onnx dir> <cache dir>
+CRAFT_TEST_SAM21_ONNX_DIR=<onnx dir> CRAFT_TEST_SAM21_BURN_DIR=<folder printed above> \
+CRAFT_TEST_SAM21_IMAGE=<512 square sample> \
+  cargo test --release -p craft-ai-engine-burn --test live -j 8 -- --ignored --nocapture
+# Through the client, two apps
+cargo test -p craft-ai-client --features burn --test burn_engine -j 8 -- --ignored
+python tools/mutation/mutation_check.py be
+```
+
+## Limits to know
+
+- SAM 2.1 tiny only. A different architecture needs its own generated code and runner.
+- Click and box prompts. A description stays on the ComfyUI route.
+- The processor fallback uses Burn's `ndarray` backend, which Burn has marked deprecated in favour
+  of `burn-flex`. It is the backend the parity was measured on; swap it once flex is measured.
+- A few generated `forward` functions are 500 to 699 lines because a function cannot be split
+  without tracking every value that passes between the halves. No file is 700 lines or more.
+- The host step that turns a downloaded `encoder.onnx` into a saved copy and records `encoder.bpk`
+  as the weights file is not built here.
