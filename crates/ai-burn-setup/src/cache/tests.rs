@@ -1,0 +1,132 @@
+//! Tiny fake conversions prove cache behaviour, never real model execution.
+
+use super::*;
+use sha2::{Digest, Sha256};
+use std::cell::Cell;
+use std::fs;
+use tempfile::TempDir;
+
+/// A converter whose call count distinguishes a fresh conversion from reuse.
+#[derive(Default)]
+struct Fake(Cell<usize>);
+
+impl Converter for Fake {
+    /// Writes tiny distinguishable weights to the same output shape as the actual converter.
+    fn convert(&self, source: &Path, output: &Path) -> Result<(), AiError> {
+        self.0.set(self.0.get() + 1);
+        assert_eq!(fs::read(source.join("encoder.onnx")).unwrap(), b"encoder");
+        assert_eq!(fs::read(source.join("decoder.onnx")).unwrap(), b"decoder");
+        fs::write(output.join("encoder.bpk"), b"encoder weights").unwrap();
+        fs::write(output.join("decoder.bpk"), b"decoder weights").unwrap();
+        Ok(())
+    }
+}
+
+/// A supported test bundle and original files, separate from the cache folder.
+struct Rig {
+    _dir: TempDir,
+    source: PathBuf,
+    cache: PathBuf,
+    bundle: Bundle,
+    cancelled: AtomicBool,
+}
+
+impl Rig {
+    /// Builds small source files and freezes their actual hashes.
+    fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("originals");
+        fs::create_dir(&source).unwrap();
+        let files = ["encoder", "decoder"].map(|name| {
+            let bytes = name.as_bytes();
+            let filename = format!("{name}.onnx");
+            fs::write(source.join(&filename), bytes).unwrap();
+            SourceFile {
+                name: filename,
+                size: bytes.len() as u64,
+                sha256: Sha256::digest(bytes)
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect(),
+            }
+        });
+        Self {
+            cache: dir.path().join("cache"),
+            _dir: dir,
+            source,
+            bundle: Bundle {
+                revision: "test-v1".into(),
+                files,
+            },
+            cancelled: AtomicBool::new(false),
+        }
+    }
+
+    /// Runs the production cache lifecycle with the supplied tiny converter.
+    fn prepare(&self, converter: &dyn Converter) -> Result<PreparedWeights, AiError> {
+        prepare(
+            &self.bundle,
+            &self.source,
+            &self.cache,
+            &self.cancelled,
+            converter,
+        )
+    }
+}
+
+/// An original file with the wrong bytes must be refused before conversion.
+#[test]
+fn a_source_hash_mismatch_never_reaches_the_converter() {
+    let mut r = Rig::new();
+    r.bundle.files[0].sha256 = "0".repeat(64);
+    let fake = Fake::default();
+    let error = r.prepare(&fake).unwrap_err();
+    assert!(error.message.contains("original model files"), "{error:?}");
+    assert_eq!(fake.0.get(), 0);
+}
+
+/// A saved file changed without changing its size must not be reused.
+#[test]
+fn damaged_saved_weights_are_refused_without_overwriting_them() {
+    let r = Rig::new();
+    let fake = Fake::default();
+    let first = r.prepare(&fake).unwrap();
+    fs::write(&first.encoder, b"Encoder weights").unwrap();
+    let error = r.prepare(&fake).unwrap_err();
+    assert!(error.message.contains("saved model files"));
+    assert_eq!(fake.0.get(), 1);
+    assert_eq!(fs::read(first.encoder).unwrap(), b"Encoder weights");
+}
+
+/// A published directory that has lost a component is not ready.
+#[test]
+fn a_missing_saved_decoder_is_not_a_complete_conversion() {
+    let r = Rig::new();
+    let fake = Fake::default();
+    let first = r.prepare(&fake).unwrap();
+    fs::remove_file(first.decoder).unwrap();
+    assert!(r.prepare(&fake).is_err());
+    assert_eq!(fake.0.get(), 1);
+}
+
+/// Preparing once saves checked weights and the second request reuses them without converting.
+#[test]
+fn choosing_burn_again_reuses_the_local_weights() {
+    let r = Rig::new();
+    let fake = Fake::default();
+    let first = r.prepare(&fake).unwrap();
+    assert_eq!(first.preparation, Preparation::Converted);
+    assert_eq!(fs::read(&first.encoder).unwrap(), b"encoder weights");
+    assert_eq!(fs::read(&first.decoder).unwrap(), b"decoder weights");
+    let second = r.prepare(&fake).unwrap();
+    assert_eq!(second.preparation, Preparation::Reused);
+    assert_eq!(second.encoder, first.encoder);
+    assert_eq!(fake.0.get(), 1);
+    assert_eq!(fs::read(r.source.join("encoder.onnx")).unwrap(), b"encoder");
+    assert_eq!(fs::read(r.source.join("decoder.onnx")).unwrap(), b"decoder");
+}
+
+#[path = "boundaries.rs"]
+mod boundaries;
+#[path = "safety.rs"]
+mod safety;
