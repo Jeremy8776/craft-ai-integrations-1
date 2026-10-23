@@ -25,4 +25,5 @@ FR = [
     ('recovery-uses-old-folder', C + 'setup_flow.rs', 'self.failed_check.as_ref().is_some_and(|failed| {', 'false && self.failed_check.as_ref().is_some_and(|failed| {', CL, 'setup_recovery_folder', 'bad_same_size_file'),
     ('recovery-uses-preselected-folder', C + 'setup_flow.rs', 'self.failed_destination.as_deref() == Some(destination)', 'false', CL, 'setup_recovery_folder', 'preselected_other_folder'),
     ('recovery-overwrites-intervening-file', C + 'folders/setup.rs', 'std::fs::create_dir(destination)', 'std::fs::create_dir_all(destination)', CL, 'setup_recovery_folder', 'intervening_file'),
+    ('missing-folder-reported-as-existing', C + 'folders/setup.rs', '"the chosen model folder is missing; choose a new one"', '"choose a new model folder: this model directory already exists"', CL, 'setup_create_folder_error', 'missing_parent_is_reported'),
 ]
