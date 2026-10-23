@@ -12,8 +12,13 @@ EG = 'craft-ai-egui'
 FR = [
     ('agreement-always-asked', F + 'recipe.rs', 'self.models.iter().any(|m| m.licence.accept_required)', 'true', CL, 'first_run', 'asks_for_agreement_only_when'),
     ('download-ignores-a-missing-agreement', C + 'setup_flow.rs', 'if (self.plan.needs_agreement() && !self.accepted)', 'if (false && !self.accepted)', CL, 'first_run', 'asks_for_agreement_only_when'),
-    ('start-always-downloads', C + 'setup_flow.rs', 'if self.plan.existing_directory().is_some() {\n            SetupTask::CheckExisting', 'if false {\n            SetupTask::CheckExisting', CL, 'first_run', 'start_checks_files'),
+    ('start-always-downloads', C + 'setup_flow.rs', 'if existing.is_some() && existing != self.failed_check.as_deref() {\n            SetupTask::CheckExisting', 'if false {\n            SetupTask::CheckExisting', CL, 'first_run', 'start_checks_files'),
     ('suggested-folder-replaces-a-chosen-default', C + 'folders.rs', 'if let Some(default) = chosen.iter().find(|f| f.default) {', 'if let Some(default) = chosen.iter().find(|f| f.default && false) {', CL, 'first_run', 'suggested_folder_is_made_only_when'),
     ('adopt-forgets-the-kept-choice', C + 'local.rs', '            self.view(&role)?.bound\n', '            None\n', CL, 'first_run', 'adopting_checked_files'),
     ('widget-always-shows-the-tick-box', 'crates/ai-egui/src/native_setup.rs', 'if needs_agreement {', 'if true {', EG, 'native_setup_first_run', 'no_licence_to_accept'),
+    ('failed-check-is-checked-again', C + 'setup_flow.rs', 'existing.is_some() && existing != self.failed_check.as_deref()', 'existing.is_some()', CL, 'setup_failed_check', 'after_a_failed_check_the_start'),
+    ('failed-check-is-forgotten', C + 'setup_flow.rs', 'self.problem = Some(error.kind);\n                self.failed_check = failed_check;', 'self.problem = Some(error.kind);', CL, 'setup_failed_check', 'after_a_failed_check_the_start'),
+    ('failed-download-counts-as-a-failed-check', C + 'setup_flow.rs', '(active.task == SetupTask::CheckExisting)', '(true)', CL, 'setup_failed_check', 'failed_download_does_not'),
+    ('chosen-folder-needs-a-suggestion', C + 'folders.rs', 'if let Some(folder) = self.chosen_default()? {\n            return Ok(folder);\n        }\n        let suggested', 'if let Some(folder) = self.chosen_default()?.filter(|_| false) {\n            return Ok(folder);\n        }\n        let suggested', CL, 'lib', 'chosen_folder_needs_no_suggestion'),
+    ('widget-picks-its-own-task', 'crates/ai-egui/src/native_setup.rs', 'craft_ai_client::SetupTask::CheckExisting => CHECK_FILES,', 'craft_ai_client::SetupTask::CheckExisting => DOWNLOAD_MODEL,', EG, 'native_setup_one_button', 'one_button_checks_them'),
 ]

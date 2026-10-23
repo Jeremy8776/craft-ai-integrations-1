@@ -118,17 +118,13 @@ pub fn native_model_setup(ui: &mut Ui, session: &mut SetupSession) -> Option<Nat
     if let Some(directory) = plan.existing_directory() {
         ui.label("Existing model files:");
         ui.label(directory.to_string_lossy());
-        if ui
-            .add_enabled(plan.available(), egui::Button::new(CHECK_FILES))
-            .clicked()
-        {
-            return session
-                .begin(craft_ai_client::SetupTask::CheckExisting)
-                .map(NativeSetupAction::Work);
-        }
     }
-    // Ask only when a licence needs it: files with no terms to agree to need no tick box.
-    let needs_agreement = plan.needs_agreement();
+    // One start button, and the session says what it does: check the complete files on disk, or
+    // download when there are none or they failed their check. The widget never picks the task.
+    let task = session.next_task();
+    // Ask only when a licence needs it: files with no terms to agree to need no tick box, and
+    // checking files already on disk agrees to nothing.
+    let needs_agreement = plan.needs_agreement() && task == craft_ai_client::SetupTask::Download;
     let mut accepted = session.accepted();
     if needs_agreement {
         ui.add_enabled_ui(plan.available(), |ui| {
@@ -136,16 +132,15 @@ pub fn native_model_setup(ui: &mut Ui, session: &mut SetupSession) -> Option<Nat
         });
         session.accept_licences(accepted);
     }
+    let label = match task {
+        craft_ai_client::SetupTask::CheckExisting => CHECK_FILES,
+        craft_ai_client::SetupTask::Download => DOWNLOAD_MODEL,
+    };
     if ui
-        .add_enabled(
-            plan.available() && (accepted || !needs_agreement) && plan.destination().is_some(),
-            egui::Button::new(DOWNLOAD_MODEL),
-        )
+        .add_enabled(session.blocker().is_none(), egui::Button::new(label))
         .clicked()
     {
-        return session
-            .begin(craft_ai_client::SetupTask::Download)
-            .map(NativeSetupAction::Work);
+        return session.start().map(NativeSetupAction::Work);
     }
     if ui
         .add_enabled(plan.available(), egui::Button::new("Find model files"))

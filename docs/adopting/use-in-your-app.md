@@ -279,14 +279,19 @@ have no setup screen, your popup links to the launcher.
 If you do draw the set-up screen for a built-in model, the shared state keeps the steps in order,
 so you draw them and run the work on a thread:
 
-1. `FolderDesk::ensure_default` makes sure downloads have a place. It takes the suggested folder
-   only when the person has none, and never replaces one they chose.
-2. `FolderDesk::prepare_native_setup` builds the plan, and `SetupSession::new` holds it. The plan
+1. `FolderDesk::prepare_native_setup` builds the plan, and `SetupSession::new` holds it. The plan
    says the size, the destination and whether any file needs a licence agreement
-   (`NativeSetupPlan::needs_agreement`). Show the tick box only then.
+   (`NativeSetupPlan::needs_agreement`). Show the tick box only then. With no model folder
+   chosen the plan has no destination and `blocker` says `NeedsFolder`. Show the suggested folder
+   and let the person take it.
+2. Only when the person takes the suggested folder, call `FolderDesk::ensure_default`, then give
+   `SetupSession::review` a fresh plan. It takes the suggested folder only when the person has
+   none, and never replaces one they chose. Do not call it while drawing the first screen: it
+   makes the folder.
 3. One button calls `SetupSession::start`. It checks the files already on disk when there are
    complete ones, and downloads when there are not. When it does nothing, `SetupSession::blocker`
-   says why (busy, no folder, agreement missing, this app cannot run it). Run the returned
+   says why (busy, no folder, agreement missing, this app cannot run it). If a check of the
+   files on disk fails, the next `start` downloads instead. Run the returned
    `SetupRequest` with `SetupRequest::run` on a worker, and report progress and the answer with
    `report_progress` and `complete`.
 4. When `session.checked()` has files, `ToolDesk::adopt` makes them a model the tool can use. It
