@@ -51,7 +51,7 @@ fn repeated_grounding_has_a_fresh_sink_without_invalidating_inference_nodes() {
         "/view?filename=mask.png&type=output" => Reply::Raw(
             [
                 format!(
-                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                     server_mask.len()
                 )
                 .into_bytes(),

@@ -110,8 +110,11 @@ pub fn server_nodes(
             .map(|(_, data)| {
                 Reply::Raw(
                     [
-                        format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", data.len())
-                            .into_bytes(),
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            data.len()
+                        )
+                        .into_bytes(),
                         data.clone(),
                     ]
                     .concat(),

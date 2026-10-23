@@ -55,7 +55,11 @@ fn server(upload_type: &'static str) -> Server {
         ),
         "/view?filename=ComfyUI_temp_abc_00001_.png&type=temp" => Reply::Raw(
             [
-                format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", mask.len()).into_bytes(),
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    mask.len()
+                )
+                .into_bytes(),
                 mask.clone(),
             ]
             .concat(),

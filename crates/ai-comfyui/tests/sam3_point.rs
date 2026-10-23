@@ -52,7 +52,7 @@ fn a_point_queues_the_installed_sam3_workflow_and_returns_a_mask() {
         "/upload/image" => Reply::Json(200, json!({"name":"uploaded.png","subfolder":"","type":"temp"}).to_string()),
         "/prompt" => Reply::Json(200, json!({"prompt_id":"point-job"}).to_string()),
         "/history/point-job" => Reply::Json(200, json!({"point-job":{"status":{"completed":true},"outputs":{"7":{"images":[{"filename":"mask.png","type":"output","subfolder":""}]}}}}).to_string()),
-        "/view?filename=mask.png&type=output" => Reply::Raw([format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", reply.len()).into_bytes(), reply.clone()].concat()),
+        "/view?filename=mask.png&type=output" => Reply::Raw([format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", reply.len()).into_bytes(), reply.clone()].concat()),
         _ => Reply::Json(404, "{}".into()),
     }
     });

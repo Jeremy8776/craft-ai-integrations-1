@@ -57,7 +57,7 @@ fn selected_sam21_segments_the_image_with_florence_and_returns_an_exact_mask() {
         "/upload/image" => Reply::Json(200,json!({"name":"source.png","type":"temp","subfolder":""}).to_string()),
         "/prompt" => Reply::Json(200,json!({"prompt_id":"sam21-job"}).to_string()),
         "/history/sam21-job" => Reply::Json(200,json!({"sam21-job":{"status":{"completed":true},"outputs":{"8":{"images":[{"filename":"mask.png","type":"output","subfolder":""}]}}}}).to_string()),
-        "/view?filename=mask.png&type=output" => Reply::Raw([format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",server_mask.len()).into_bytes(),server_mask.clone()].concat()),
+        "/view?filename=mask.png&type=output" => Reply::Raw([format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",server_mask.len()).into_bytes(),server_mask.clone()].concat()),
         _ => Reply::Json(404,"{}".into()),
     }
     });
@@ -109,7 +109,7 @@ fn cancelling_sam21_removes_only_its_queued_prompt() {
         "/prompt" => Reply::Json(200,json!({"prompt_id":"sam21-job"}).to_string()),
         "/history/sam21-job" if server_polls.fetch_add(1, Ordering::SeqCst) == 0 => Reply::Json(200,"{}".to_owned()),
         "/history/sam21-job" => Reply::Json(200,json!({"sam21-job":{"status":{"completed":true},"outputs":{"8":{"images":[{"filename":"mask.png","type":"output","subfolder":""}]}}}}).to_string()),
-        "/view?filename=mask.png&type=output" => Reply::Raw([format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",server_mask.len()).into_bytes(),server_mask.clone()].concat()),
+        "/view?filename=mask.png&type=output" => Reply::Raw([format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",server_mask.len()).into_bytes(),server_mask.clone()].concat()),
         "/queue" => Reply::Json(200,json!({"deleted":true}).to_string()),
         _ => Reply::Json(404,"{}".into()),
     }
@@ -184,7 +184,7 @@ fn device_server(device: Option<&'static str>, view_type: &'static str) -> Serve
         "/upload/image" => Reply::Json(200, json!({"name":"source.png","type":"temp","subfolder":""}).to_string()),
         "/prompt" => Reply::Json(200, json!({"prompt_id":"job"}).to_string()),
         "/history/job" => Reply::Json(200, json!({"job":{"status":{"completed":true},"outputs":{"8":{"images":[{"filename":"mask.png","type":view_type,"subfolder":""}]}}}}).to_string()),
-        "/view?filename=mask.png&type=output" => Reply::Raw([format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", mask.len()).into_bytes(), mask.clone()].concat()),
+        "/view?filename=mask.png&type=output" => Reply::Raw([format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", mask.len()).into_bytes(), mask.clone()].concat()),
         _ => Reply::Json(404, "{}".into()),
     }
     })
