@@ -7,8 +7,8 @@ use craft_ai_client::{AiClient, ProviderFactory, SampleReport, TestStart, ToolDe
 use craft_ai_core::job::{Event, Output};
 use craft_ai_core::segment::{self, Found};
 use craft_ai_core::{
-    AiError, InputRole, JobId, JobSnapshot, JobState, ModelId, ModelInfo, Payload, Provider,
-    Request,
+    AiError, ConnectionId, InputRole, JobId, JobSnapshot, JobState, ModelId, ModelInfo, Payload,
+    Provider, Request,
 };
 use craft_ai_features::{Feature, builtin};
 use craft_ai_native::secrets::MemoryStore;
@@ -137,4 +137,31 @@ fn a_selection_that_chose_nothing_fails_the_test() {
         SampleReport::Failed { message } => assert!(message.contains("selected nothing")),
         other => panic!("expected a failed test, got {other:?}"),
     }
+}
+
+/// A custom connection that only reuses the built-in engine's name is tried with the description,
+/// since its model may need words; only the connection this suite saves gets the click.
+#[test]
+fn a_custom_connection_with_a_built_in_engine_name_gets_the_description() {
+    let dir = tempfile::tempdir().unwrap();
+    let (desk, shared, seen) = desk(&dir, true);
+    let weights = dir.path().join("encoder.onnx");
+    std::fs::write(&weights, b"x").unwrap();
+    let f = select_subject();
+    desk.enable_native_with(&f, "rten", &weights).unwrap();
+    let custom = ConnectionId::new("my-own-rten").unwrap();
+    shared
+        .update(|store| {
+            for connection in &mut store.connections {
+                connection.id = custom.clone();
+            }
+            for binding in &mut store.defaults {
+                binding.connection = custom.clone();
+            }
+        })
+        .unwrap();
+    assert!(matches!(run(&desk, &f), SampleReport::Passed { .. }));
+    let request = seen.lock().unwrap().pop().unwrap();
+    assert!(segment::description(&request).is_some());
+    assert!(segment::clicks(&request).unwrap().is_empty());
 }

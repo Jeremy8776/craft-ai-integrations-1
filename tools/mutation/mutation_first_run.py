@@ -15,7 +15,7 @@ FR = [
     ('start-always-downloads', C + 'setup_flow.rs', 'if existing.is_some() && existing != self.failed_check.as_deref() {\n            SetupTask::CheckExisting', 'if false {\n            SetupTask::CheckExisting', CL, 'first_run', 'start_checks_files'),
     ('suggested-folder-replaces-a-chosen-default', C + 'folders.rs', 'if let Some(default) = chosen.iter().find(|f| f.default) {', 'if let Some(default) = chosen.iter().find(|f| f.default && false) {', CL, 'first_run', 'suggested_folder_is_made_only_when'),
     ('adopt-forgets-the-kept-choice', C + 'local.rs', '            self.view(&role)?.bound\n', '            None\n', CL, 'first_run', 'adopting_checked_files'),
-    ('sample-ignores-the-route', C + 'tools.rs', 'Ok(Some(route)) => feature.engines().contains(&route.provider.as_str()),', 'Ok(Some(_)) => false,', CL, 'sample_route', 'built_in_route_is_tried'),
+    ('sample-ignores-the-route', C + 'tools.rs', 'feature.engines().contains(&route.provider.as_str())', 'false && feature.engines().contains(&route.provider.as_str())', CL, 'sample_route', 'built_in_route_is_tried'),
     ('nothing-selected-still-passes', C + 'tools.rs', 'is_some_and(|found| !found.matched)', 'is_some_and(|found| false && !found.matched)', CL, 'sample_route', 'chose_nothing'),
     ('status-ignores-a-missing-file', C + 'client.rs', '&& !std::path::Path::new(file).is_file()', '&& false', CL, 'first_run_state', 'file_is_gone_is_not_ready'),
     ('picker-lists-a-gone-model-twice', C + 'picker_groups.rs', 'if files_gone(connection, role, options) {', 'if false {', CL, 'first_run_state', 'file_is_gone_is_not_ready'),
@@ -32,4 +32,5 @@ FR = [
     ('missing-result-still-passes', C + 'tools.rs', 'if found.is_none() && role.capability.as_str() == segment::CAPABILITY {', 'if false && role.capability.as_str() == segment::CAPABILITY {', CL, 'sample_missing_result', 'no_result_beside_it'),
     ('small-card-calls-a-quick-engine-slow', F + 'engine.rs', 'Some(g) if too_small(g, min_vram_mb) && offer.fast_on_processor => (', 'Some(g) if false && too_small(g, min_vram_mb) && offer.fast_on_processor => (', FE, 'engine_small_card', 'too_small_does_not_make'),
     ('candle-always-reports-a-match', 'crates/ai-engine-candle/src/runner.rs', 'matched: score.is_some(),', 'matched: true,', 'craft-ai-engine-candle', 'lib', 'result_says_whether_anything'),
+    ('custom-connection-gets-the-click', C + 'tools.rs', '&& route.connection.as_str()\n                        == crate::local::native_connection_id(&feature.id, &route.provider)', '', CL, 'sample_route', 'custom_connection_with_a_built_in'),
 ]
