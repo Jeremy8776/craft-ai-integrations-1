@@ -58,7 +58,10 @@ pub fn native_model_setup(ui: &mut Ui, session: &mut SetupSession) -> Option<Nat
         if let Some(suggested) = craft_ai_native::paths::suggested_models_dir() {
             ui.label(format!("Suggested folder: {}", suggested.to_string_lossy()));
             if ui
-                .add_enabled(plan.available(), egui::Button::new(USE_SUGGESTED_FOLDER))
+                .add_enabled(
+                    plan.available() && !session.busy(),
+                    egui::Button::new(USE_SUGGESTED_FOLDER),
+                )
                 .clicked()
             {
                 return Some(NativeSetupAction::UseSuggestedFolder);
