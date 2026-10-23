@@ -69,7 +69,7 @@ pub use factory::{BuildFn, ProviderFactory};
 pub use folders::{
     CheckedNative, FolderAdded, FolderDesk, NativeFiles, NativeInstall, NativeSetupPlan,
 };
-pub use local::{LocalEnabled, LocalRoute};
+pub use local::{Adopted, LocalEnabled, LocalRoute};
 pub use manage::{
     Confirmed, ConnectionManager, ConnectionView, KeyState, MAX_DECLARED, ModelChoice, ProbeReport,
     ProbedModel, Removed, SaveError, Saved, TestReport, Unconfirmed, declare_models,
@@ -80,5 +80,5 @@ pub use picker::{
 pub use picker_presets::pick_label;
 pub use popup::MissingModel;
 pub use runner::{TestRunner, TestTarget};
-pub use setup_flow::{SetupRequest, SetupSession, SetupTask, SetupTicket};
+pub use setup_flow::{SetupBlock, SetupRequest, SetupSession, SetupTask, SetupTicket};
 pub use tools::{Accepted, SampleReport, Skipped, TestStart, ToolDesk, ToolView};

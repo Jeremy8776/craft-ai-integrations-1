@@ -82,6 +82,11 @@ impl NativeSetupPlan {
     pub fn download_bytes(&self) -> u64 {
         self.download_bytes
     }
+    /// Whether the person must agree to a licence before the download starts. False for files whose
+    /// terms need no agreement (SAM 2.1), so the setup screen asks for nothing it does not need.
+    pub fn needs_agreement(&self) -> bool {
+        self.route.needs_agreement()
+    }
     /// Whether this app has an adapter for the runtime. Without one nothing here can be used.
     pub fn available(&self) -> bool {
         self.available

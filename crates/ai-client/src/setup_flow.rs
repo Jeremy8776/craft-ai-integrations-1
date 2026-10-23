@@ -14,6 +14,19 @@ pub enum SetupTask {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Why the single start button of a [`SetupSession`] has nothing to do yet.
+pub enum SetupBlock {
+    /// A request is already running.
+    Busy,
+    /// This app has no way to run the option, so there is nothing to set up.
+    Unavailable,
+    /// A download needs a folder to go to and none is chosen. See `FolderDesk::ensure_default`.
+    NeedsFolder,
+    /// A file's licence needs the person's agreement first (`accept_licences`).
+    NeedsAgreement,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Names one request, so an answer from an older or cancelled worker can be told apart from the
 /// current one.
 pub struct SetupTicket(u64);
@@ -180,7 +193,10 @@ impl SetupSession {
             return None;
         }
         match task {
-            SetupTask::Download if !self.accepted || self.plan.destination().is_none() => {
+            SetupTask::Download
+                if (self.plan.needs_agreement() && !self.accepted)
+                    || self.plan.destination().is_none() =>
+            {
                 return None;
             }
             SetupTask::CheckExisting if self.plan.existing_directory().is_none() => return None,
@@ -200,6 +216,39 @@ impl SetupSession {
         self.progress = None;
         self.active = Some(request.clone());
         Some(request)
+    }
+    /// What one start button does now: check the complete files already on disk when there are
+    /// any, otherwise download. A host that wants one click shows this and calls [`start`](Self::start).
+    pub fn next_task(&self) -> SetupTask {
+        if self.plan.existing_directory().is_some() {
+            SetupTask::CheckExisting
+        } else {
+            SetupTask::Download
+        }
+    }
+    /// Why [`start`](Self::start) would do nothing, or `None` when it would start a request. The
+    /// host turns this into a sentence next to a disabled button.
+    pub fn blocker(&self) -> Option<SetupBlock> {
+        if self.busy() {
+            return Some(SetupBlock::Busy);
+        }
+        if !self.plan.available() {
+            return Some(SetupBlock::Unavailable);
+        }
+        if self.next_task() == SetupTask::Download {
+            if self.plan.destination().is_none() {
+                return Some(SetupBlock::NeedsFolder);
+            }
+            if self.plan.needs_agreement() && !self.accepted {
+                return Some(SetupBlock::NeedsAgreement);
+            }
+        }
+        None
+    }
+    /// The one-click start: [`begin`](Self::begin) with [`next_task`](Self::next_task). Returns
+    /// `None` exactly when [`blocker`](Self::blocker) names a reason.
+    pub fn start(&mut self) -> Option<SetupRequest> {
+        self.begin(self.next_task())
     }
     /// Accept a worker answer without trusting its raw error text.
     pub fn complete(

@@ -104,6 +104,37 @@ impl FolderDesk {
         self.add(path, label)
     }
 
+    /// The folder new downloads go to, made if there is none yet: the folder the suite suggests
+    /// ([`suggested_models_dir`](craft_ai_native::paths::suggested_models_dir)). This is the
+    /// whole of "pick a place" for a person who accepts the suggestion, and it never moves or
+    /// changes a folder they already chose.
+    pub fn ensure_default(&self) -> Result<ModelFolder, AiError> {
+        let suggested = craft_ai_native::paths::suggested_models_dir().ok_or_else(|| {
+            AiError::invalid("this computer gives no place for app files; choose a model folder")
+        })?;
+        self.ensure_default_at(&suggested)
+    }
+
+    /// [`ensure_default`](Self::ensure_default) with the suggested folder given. Returns the
+    /// folder a person already made the default as it is. With folders chosen but none marked
+    /// default, the first becomes the default. With none, `suggested` is made and registered. A
+    /// folder read from another program is never made the default.
+    pub fn ensure_default_at(&self, suggested: &Path) -> Result<ModelFolder, AiError> {
+        let chosen: Vec<ModelFolder> = self
+            .list()?
+            .into_iter()
+            .filter(|f| f.origin == FolderOrigin::Chosen)
+            .collect();
+        if let Some(default) = chosen.iter().find(|f| f.default) {
+            return Ok(default.clone());
+        }
+        if let Some(first) = chosen.first() {
+            self.set_default(&first.id)?;
+            return self.find(&first.id);
+        }
+        Ok(self.add_new(suggested, Some("ArtCraft models"))?.folder)
+    }
+
     /// Reads the folder again, for files added or moved since. Replaces its map.
     pub fn rescan(&self, id: &str) -> Result<FolderScan, AiError> {
         let folder = self.find(id)?;

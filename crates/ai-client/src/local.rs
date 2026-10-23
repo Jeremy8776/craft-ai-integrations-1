@@ -17,6 +17,7 @@ use craft_ai_core::{
 use craft_ai_features::Feature;
 
 use crate::client::AiClient;
+use crate::folders::CheckedNative;
 use crate::tools::ToolDesk;
 
 /// The exact local connection and model chosen for a tool, without any key.
@@ -28,6 +29,18 @@ pub struct LocalRoute {
     pub endpoint: Option<String>,
     /// The weights file of a model an app runs itself, as recorded by whoever registered it.
     pub file: Option<String>,
+}
+
+/// What [`ToolDesk::adopt`] did with files that passed their checks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Adopted {
+    pub connection: ConnectionId,
+    pub model: ModelId,
+    /// The tool is now bound to it. False when a choice was already made, which is left alone.
+    pub bound: bool,
+    /// The choice that stayed in place, when `bound` is false. Show it and ask before switching:
+    /// [`ToolDesk::choose`] with `connection` and `model` makes this one the choice.
+    pub kept: Option<(ConnectionId, ModelId)>,
 }
 
 /// What [`ToolDesk::enable_local`] did.
@@ -182,6 +195,30 @@ impl ToolDesk {
 }
 
 impl ToolDesk {
+    /// Makes files that passed every check a model the tool can use. Only a [`CheckedNative`]
+    /// is accepted, so a path nobody hashed cannot be registered through the setup flow. The tool
+    /// is bound only if no choice is made yet; otherwise the earlier choice is returned in
+    /// [`Adopted::kept`] and nothing is switched without the person's yes.
+    pub fn adopt(&self, checked: &CheckedNative) -> Result<Adopted, AiError> {
+        let enabled =
+            self.enable_native_with(checked.feature(), checked.provider(), checked.weights())?;
+        let kept = if enabled.bound {
+            None
+        } else {
+            let role = checked
+                .feature()
+                .role()
+                .ok_or_else(|| AiError::invalid("the tool id is not valid"))?;
+            self.view(&role)?.bound
+        };
+        Ok(Adopted {
+            connection: enabled.connection,
+            model: enabled.model,
+            bound: enabled.bound,
+            kept,
+        })
+    }
+
     /// Registers the first built-in runtime ([`NativeRoute`](craft_ai_features::NativeRoute)) of
     /// `feature`'s first recipe that can run, reading the weights at `weights`, and binds the tool
     /// to it if nothing is chosen yet.

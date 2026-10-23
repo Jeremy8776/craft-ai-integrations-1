@@ -46,8 +46,8 @@ pub use history::{
     REFRESH, Range, TAB_DAYS, TAB_JOBS, TAB_MONTHS, Tab, history_view,
 };
 pub use native_setup::{
-    ACCEPT_LICENCES, CHECK_FILES, DOWNLOAD_MODEL, NativeSetupAction, USE_MODEL, native_model_setup,
-    setup_problem,
+    ACCEPT_LICENCES, CHECK_FILES, DOWNLOAD_MODEL, NativeSetupAction, USE_MODEL,
+    USE_SUGGESTED_FOLDER, native_model_setup, setup_problem,
 };
 pub use panel::{ConnectionPanel, PanelEvent};
 pub use picker::{

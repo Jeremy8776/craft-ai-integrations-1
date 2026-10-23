@@ -119,6 +119,12 @@ impl NativeRoute {
         })
     }
 
+    /// Whether any of this runtime's files needs the person's agreement before its download
+    /// ([`Licence::accept_required`]). When none does, a download needs no tick box.
+    pub fn needs_agreement(&self) -> bool {
+        self.models.iter().any(|m| m.licence.accept_required)
+    }
+
     /// Bytes to download for this runtime's own files.
     pub fn total_bytes(&self) -> u64 {
         self.models

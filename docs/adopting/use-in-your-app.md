@@ -276,6 +276,26 @@ Setting up a model (downloads, keys, a local server) belongs to the launcher's S
 to your own Preferences, built from the same shared pieces. Do not build a second setup flow. If you
 have no setup screen, your popup links to the launcher.
 
+If you do draw the set-up screen for a built-in model, the shared state keeps the steps in order,
+so you draw them and run the work on a thread:
+
+1. `FolderDesk::ensure_default` makes sure downloads have a place. It takes the suggested folder
+   only when the person has none, and never replaces one they chose.
+2. `FolderDesk::prepare_native_setup` builds the plan, and `SetupSession::new` holds it. The plan
+   says the size, the destination and whether any file needs a licence agreement
+   (`NativeSetupPlan::needs_agreement`). Show the tick box only then.
+3. One button calls `SetupSession::start`. It checks the files already on disk when there are
+   complete ones, and downloads when there are not. When it does nothing, `SetupSession::blocker`
+   says why (busy, no folder, agreement missing, this app cannot run it). Run the returned
+   `SetupRequest` with `SetupRequest::run` on a worker, and report progress and the answer with
+   `report_progress` and `complete`.
+4. When `session.checked()` has files, `ToolDesk::adopt` makes them a model the tool can use. It
+   accepts only checked files. It binds the tool only if no choice exists. If one does,
+   `Adopted::kept` names it, so you can ask before calling `ToolDesk::choose`.
+
+Nothing in these steps binds a model, downloads anything or starts a job without the person
+pressing the button.
+
 ## 10. Errors, in one table
 
 A failed job carries an `AiError { kind, message }`. The message is safe to show.

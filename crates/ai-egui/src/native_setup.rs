@@ -9,6 +9,9 @@ pub enum NativeSetupAction {
     Use(CheckedNative),
     FindFiles,
     ChangeFolder,
+    /// The person took the suggested model folder. The host calls `FolderDesk::ensure_default`
+    /// and shows a fresh plan.
+    UseSuggestedFolder,
     Cancel(SetupTicket),
     Back,
 }
@@ -17,6 +20,8 @@ pub enum NativeSetupAction {
 pub const ACCEPT_LICENCES: &str = "I accept the model's licences";
 /// Label of the download button.
 pub const DOWNLOAD_MODEL: &str = "Download model files";
+/// Label of the button that takes the suggested model folder when none is chosen.
+pub const USE_SUGGESTED_FOLDER: &str = "Use the suggested folder";
 /// Label of the button that checks files already on disk.
 pub const CHECK_FILES: &str = "Check existing files";
 /// Label of the button that applies checked files; the host makes the choice, not the widget.
@@ -48,6 +53,12 @@ pub fn native_model_setup(ui: &mut Ui, session: &mut SetupSession) -> Option<Nat
         ui.label(destination.to_string_lossy());
     } else {
         ui.label("Choose a model folder before downloading.");
+        if ui
+            .add_enabled(plan.available(), egui::Button::new(USE_SUGGESTED_FOLDER))
+            .clicked()
+        {
+            return Some(NativeSetupAction::UseSuggestedFolder);
+        }
     }
     let mut licences = Vec::new();
     for file in &plan.route().models {
@@ -116,14 +127,18 @@ pub fn native_model_setup(ui: &mut Ui, session: &mut SetupSession) -> Option<Nat
                 .map(NativeSetupAction::Work);
         }
     }
+    // Ask only when a licence needs it: files with no terms to agree to need no tick box.
+    let needs_agreement = plan.needs_agreement();
     let mut accepted = session.accepted();
-    ui.add_enabled_ui(plan.available(), |ui| {
-        ui.checkbox(&mut accepted, ACCEPT_LICENCES);
-    });
-    session.accept_licences(accepted);
+    if needs_agreement {
+        ui.add_enabled_ui(plan.available(), |ui| {
+            ui.checkbox(&mut accepted, ACCEPT_LICENCES);
+        });
+        session.accept_licences(accepted);
+    }
     if ui
         .add_enabled(
-            plan.available() && accepted && plan.destination().is_some(),
+            plan.available() && (accepted || !needs_agreement) && plan.destination().is_some(),
             egui::Button::new(DOWNLOAD_MODEL),
         )
         .clicked()
