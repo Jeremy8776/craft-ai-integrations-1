@@ -3,7 +3,7 @@
 //! Scripted localhost only; tiny files, no real model or service.
 mod native_setup_support;
 use craft_ai_client::{
-    AiClient, FolderDesk, NativeSetupPlan, ProviderFactory, SetupSession, SetupTask,
+    AiClient, FolderDesk, NativeSetupPlan, ProviderFactory, SetupBlock, SetupSession, SetupTask,
 };
 use craft_ai_core::{AiError, AppId, ErrorKind};
 use craft_ai_features::Feature;
@@ -46,8 +46,8 @@ fn plan_with_files(desk: &FolderDesk, f: &Feature, dir: &Path) -> NativeSetupPla
     desk.prepare_native_setup(f, "candle", &app(dir)).unwrap()
 }
 
-/// Files on disk are checked first. When that check fails, the next start downloads, and a plan
-/// refresh (progress, a rescan) does not take the download away again.
+/// Files on disk are checked first. When that check fails, the old destination cannot be
+/// downloaded to. A new destination must be approved before starting again.
 #[test]
 fn after_a_failed_check_the_start_button_downloads() {
     let (dir, desk, _) = world();
@@ -63,18 +63,14 @@ fn after_a_failed_check_the_start_button_downloads() {
     assert_eq!(session.problem(), Some(ErrorKind::InvalidRequest));
 
     assert_eq!(session.next_task(), SetupTask::Download);
-    assert_eq!(session.blocker(), None);
+    assert_eq!(session.blocker(), Some(SetupBlock::NeedsFreshFolder));
     assert!(
         session
             .review(plan_with_files(&desk, &f, dir.path()))
             .is_none()
     );
-    assert_eq!(
-        session.next_task(),
-        SetupTask::Download,
-        "a refresh of the same plan keeps the failed check in mind"
-    );
-    assert_eq!(session.start().unwrap().task(), SetupTask::Download);
+    assert_eq!(session.blocker(), Some(SetupBlock::NeedsFreshFolder));
+    assert!(session.start().is_none());
 }
 
 /// A failed download is not a failed check: the files on disk are still checked first.

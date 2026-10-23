@@ -82,7 +82,7 @@ fn with_files_on_disk_the_one_button_checks_them() {
     assert!(h.state().session.busy());
 }
 
-/// After the check fails the button becomes the download, so the person is not stuck.
+/// A failed check blocks downloading to the old folder, and the screen asks for a new one.
 #[test]
 fn after_a_failed_check_the_one_button_downloads() {
     let mut h = harness_with_files();
@@ -99,10 +99,11 @@ fn after_a_failed_check_the_one_button_downloads() {
     );
     h.run();
     assert!(h.query_by_label(CHECK_FILES).is_none());
-    h.get_by_label(DOWNLOAD_MODEL).click();
-    h.run();
-    match &h.state().last {
-        Some(NativeSetupAction::Work(request)) => assert_eq!(request.task(), SetupTask::Download),
-        other => panic!("expected a download, got {other:?}"),
-    }
+    assert!(
+        h.get_by_label(DOWNLOAD_MODEL)
+            .accesskit_node()
+            .is_disabled()
+    );
+    assert!(h.query_by_label("These files did not pass their check. Choose a new empty model folder for the download. The old files will be left alone.").is_some());
+    assert!(!h.state().session.busy());
 }
