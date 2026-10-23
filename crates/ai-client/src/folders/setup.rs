@@ -85,8 +85,17 @@ impl NativeSetupPlan {
         let destination = self
             .destination()
             .ok_or_else(|| AiError::invalid("choose a new model folder first"))?;
-        std::fs::create_dir(destination).map_err(|_| {
-            AiError::invalid("choose a new model folder: this model directory already exists")
+        std::fs::create_dir(destination).map_err(|error| match error.kind() {
+            std::io::ErrorKind::AlreadyExists => {
+                AiError::invalid("choose a new model folder: this model directory already exists")
+            }
+            std::io::ErrorKind::NotFound => {
+                AiError::invalid("the chosen model folder is missing; choose a new one")
+            }
+            std::io::ErrorKind::PermissionDenied => {
+                AiError::invalid("cannot write to this model folder; choose another location")
+            }
+            _ => AiError::invalid(format!("could not create the model folder: {error}")),
         })?;
         self.download(request)
     }
