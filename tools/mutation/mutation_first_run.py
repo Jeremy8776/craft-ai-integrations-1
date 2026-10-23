@@ -33,4 +33,5 @@ FR = [
     ('small-card-calls-a-quick-engine-slow', F + 'engine.rs', 'Some(g) if too_small(g, min_vram_mb) && offer.fast_on_processor => (', 'Some(g) if false && too_small(g, min_vram_mb) && offer.fast_on_processor => (', FE, 'engine_small_card', 'too_small_does_not_make'),
     ('candle-always-reports-a-match', 'crates/ai-engine-candle/src/runner.rs', 'matched: score.is_some(),', 'matched: true,', 'craft-ai-engine-candle', 'lib', 'result_says_whether_anything'),
     ('custom-connection-gets-the-click', C + 'tools.rs', '&& route.connection.as_str()\n                        == crate::local::native_connection_id(&feature.id, &route.provider)', '', CL, 'sample_route', 'custom_connection_with_a_built_in'),
+    ('suggested-folder-path-hidden', 'crates/ai-egui/src/native_setup.rs', 'ui.label(format!("Suggested folder: {}", suggested.to_string_lossy()));', '', EG, 'native_setup_first_run', 'suggested_folder_is_shown'),
 ]

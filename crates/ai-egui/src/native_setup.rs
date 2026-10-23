@@ -53,11 +53,16 @@ pub fn native_model_setup(ui: &mut Ui, session: &mut SetupSession) -> Option<Nat
         ui.label(destination.to_string_lossy());
     } else {
         ui.label("Choose a model folder before downloading.");
-        if ui
-            .add_enabled(plan.available(), egui::Button::new(USE_SUGGESTED_FOLDER))
-            .clicked()
-        {
-            return Some(NativeSetupAction::UseSuggestedFolder);
+        // Taking the suggestion makes the folder, so show where it is first, and offer it only
+        // when this computer has one.
+        if let Some(suggested) = craft_ai_native::paths::suggested_models_dir() {
+            ui.label(format!("Suggested folder: {}", suggested.to_string_lossy()));
+            if ui
+                .add_enabled(plan.available(), egui::Button::new(USE_SUGGESTED_FOLDER))
+                .clicked()
+            {
+                return Some(NativeSetupAction::UseSuggestedFolder);
+            }
         }
     }
     let mut licences = Vec::new();

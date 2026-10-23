@@ -119,3 +119,17 @@ fn with_a_folder_chosen_the_suggestion_is_not_offered() {
     let h = harness(false, true);
     assert!(h.query_by_label(USE_SUGGESTED_FOLDER).is_none());
 }
+
+/// The suggested folder is named before the person is asked to take it.
+#[test]
+fn the_suggested_folder_is_shown_before_it_can_be_taken() {
+    let Some(suggested) = craft_ai_native::paths::suggested_models_dir() else {
+        return;
+    };
+    let h = harness(false, false);
+    h.get_by_label(&format!(
+        "Suggested folder: {}",
+        suggested.to_string_lossy()
+    ));
+    h.get_by_label(USE_SUGGESTED_FOLDER);
+}
