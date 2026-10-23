@@ -22,14 +22,17 @@ struct Fake {
 }
 
 impl Provider for Fake {
+    /// No model list; the connection carries it.
     fn models(&self) -> Result<Vec<ModelInfo>, AiError> {
         Ok(Vec::new())
     }
+    /// Counts the job and gives it a number.
     fn submit(&self, _: &ModelId, _: &Request) -> Result<JobId, AiError> {
         let mut n = self.jobs.lock().unwrap();
         *n += 1;
         JobId::new(format!("job-{n}")).map_err(|e| AiError::invalid(e.to_string()))
     }
+    /// A finished job whose result depends on the connection's id: an image, text, nothing, or a failure.
     fn poll(&self, _: &JobId) -> Result<JobSnapshot, AiError> {
         let output = |payload| {
             Event::Output(Output {
@@ -52,11 +55,13 @@ impl Provider for Fake {
         }
         Ok(snap)
     }
+    /// Nothing to stop: the job is already done.
     fn cancel(&self, _: &JobId) -> Result<(), AiError> {
         Ok(())
     }
 }
 
+/// A connection named `id`, online or on this computer, with the classified `models`.
 fn connection(id: &str, remote: bool, enabled: bool, models: &[&str]) -> Connection {
     let models: Vec<_> = models
         .iter()
@@ -83,6 +88,7 @@ struct World {
     builds: Arc<AtomicUsize>,
 }
 
+/// A temporary store holding `connections`, secrets for them, and a desk whose fake provider counts how often one is built.
 fn world(connections: Vec<Connection>) -> World {
     let dir = tempfile::tempdir().unwrap();
     let shared = SharedStore::new(dir.path().join("connections.json"));
@@ -132,6 +138,7 @@ fn world(connections: Vec<Connection>) -> World {
     }
 }
 
+/// The built-in tool `id` as a role.
 fn tool(id: &str) -> Role {
     craft_ai_features::builtin()
         .into_iter()
@@ -141,6 +148,7 @@ fn tool(id: &str) -> Role {
         .unwrap()
 }
 
+/// The built-in sample request for tool `id`.
 fn sample(id: &str) -> Request {
     let f = craft_ai_features::builtin()
         .into_iter()
@@ -149,16 +157,19 @@ fn sample(id: &str) -> Request {
     craft_ai_features::sample_request(&f).unwrap()
 }
 
+/// A connection id from text.
 fn cid(s: &str) -> ConnectionId {
     ConnectionId::new(s).unwrap()
 }
 
+/// The first model offered for the image tool.
 fn image_model(w: &World) -> ModelId {
     w.desk.view(&tool("generate-image")).unwrap().choices[0]
         .model
         .clone()
 }
 
+/// Only models that can do the job, on connections that are switched on, are offered.
 #[test]
 fn only_models_that_can_do_the_job_on_connections_that_are_on_are_offered() {
     let w = world(vec![
@@ -185,6 +196,7 @@ fn only_models_that_can_do_the_job_on_connections_that_are_on_are_offered() {
     );
 }
 
+/// Choosing binds the tool, and the status follows.
 #[test]
 fn choosing_binds_the_tool_and_the_status_follows() {
     let w = world(vec![connection(
@@ -206,6 +218,7 @@ fn choosing_binds_the_tool_and_the_status_follows() {
     assert!(w.shared.load().unwrap().defaults.is_empty());
 }
 
+/// A model that cannot do the job is refused and nothing is written.
 #[test]
 fn a_model_that_cannot_do_the_job_is_refused_and_nothing_is_written() {
     let w = world(vec![connection(
@@ -235,6 +248,7 @@ fn a_model_that_cannot_do_the_job_is_refused_and_nothing_is_written() {
     );
 }
 
+/// A choice that stops holding says why and stays visible.
 #[test]
 fn a_choice_that_stops_holding_says_why_and_stays_visible() {
     let w = world(vec![connection(
@@ -258,6 +272,7 @@ fn a_choice_that_stops_holding_says_why_and_stays_visible() {
     }
 }
 
+/// Runs the sample for tool `id` to its end; `None` when it stopped to ask for agreement.
 fn run(w: &World, id: &str, agreed: bool) -> Result<Option<SampleReport>, AiError> {
     Ok(match w.desk.start_test(&tool(id), sample(id), agreed)? {
         TestStart::Started(job) => Some(ToolDesk::finish(&tool(id), &job, Duration::from_secs(5))),
@@ -265,11 +280,13 @@ fn run(w: &World, id: &str, agreed: bool) -> Result<Option<SampleReport>, AiErro
     })
 }
 
+/// Chooses the image model on connection `conn`.
 fn bound(w: &World, conn: &str) {
     let role = tool("generate-image");
     w.desk.choose(&role, &cid(conn), &image_model(w)).unwrap();
 }
 
+/// A sample on this computer runs at once and passes when the right kind of thing comes back.
 #[test]
 fn a_local_sample_runs_at_once_and_passes_when_the_right_kind_of_thing_comes_back() {
     let w = world(vec![connection(
@@ -285,6 +302,7 @@ fn a_local_sample_runs_at_once_and_passes_when_the_right_kind_of_thing_comes_bac
     }
 }
 
+/// A sample on an online service asks first and builds no provider; agreeing runs it and records the agreement.
 #[test]
 fn a_remote_sample_waits_for_agreement_and_builds_nothing_until_then() {
     let w = world(vec![connection(
@@ -329,6 +347,7 @@ fn a_remote_sample_waits_for_agreement_and_builds_nothing_until_then() {
     ));
 }
 
+/// A model that answers with the wrong kind, nothing, or an error fails the check and says which.
 #[test]
 fn a_model_that_answers_wrongly_or_not_at_all_fails_the_check() {
     for (conn, expect) in [
@@ -347,6 +366,7 @@ fn a_model_that_answers_wrongly_or_not_at_all_fails_the_check() {
     }
 }
 
+/// A sample for a tool with no choice is refused before any provider is built.
 #[test]
 fn a_sample_with_no_choice_made_is_refused_before_anything_is_sent() {
     let w = world(vec![connection(
@@ -361,6 +381,7 @@ fn a_sample_with_no_choice_made_is_refused_before_anything_is_sent() {
     assert_eq!(w.builds.load(Ordering::SeqCst), before);
 }
 
+/// Choosing again replaces the old choice, so a tool never holds two.
 #[test]
 fn choosing_again_replaces_the_old_choice_rather_than_adding_to_it() {
     let w = world(vec![
@@ -382,6 +403,7 @@ fn choosing_again_replaces_the_old_choice_rather_than_adding_to_it() {
     );
 }
 
+/// The built-in tools named by `ids`, as roles.
 fn roles(ids: &[&str]) -> Vec<Role> {
     ids.iter().map(|i| tool(i)).collect()
 }
@@ -523,4 +545,32 @@ fn the_offer_ignores_a_connection_that_is_switched_off_and_a_second_run_offers_n
             .is_empty()
     );
     assert_eq!(w.shared.load().unwrap().defaults.len(), 1);
+}
+
+/// Choosing "only if unchosen" writes nothing when the tool already has a choice, even if the
+/// caller looked before it was made: the check is inside the write.
+#[test]
+fn choosing_only_if_unchosen_never_overwrites_a_choice_already_made() {
+    let w = world(vec![
+        connection("good-remote", true, true, &["gpt-image-1"]),
+        connection("good-local", false, true, &["gpt-image-1"]),
+    ]);
+    let model = image_model(&w);
+    let role = tool("generate-image");
+    assert!(
+        w.desk
+            .choose_if_unchosen(&role, &cid("good-local"), &model)
+            .unwrap(),
+        "nothing was chosen, so this one is written"
+    );
+    assert!(
+        !w.desk
+            .choose_if_unchosen(&role, &cid("good-remote"), &model)
+            .unwrap(),
+        "a choice exists now"
+    );
+    assert_eq!(
+        w.desk.view(&role).unwrap().bound.unwrap().0,
+        cid("good-local")
+    );
 }

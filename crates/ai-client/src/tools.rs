@@ -130,6 +130,32 @@ impl ToolDesk {
         connection: &ConnectionId,
         model: &ModelId,
     ) -> Result<(), AiError> {
+        self.write_choice(role, connection, model, false)
+            .map(|_| ())
+    }
+
+    /// Chooses the model only if the tool has no suite-wide choice, checked inside the same store
+    /// lock as the write, so a choice made by another app a moment ago is never overwritten.
+    /// Returns `false`, writing nothing, when a choice already exists.
+    pub fn choose_if_unchosen(
+        &self,
+        role: &Role,
+        connection: &ConnectionId,
+        model: &ModelId,
+    ) -> Result<bool, AiError> {
+        self.write_choice(role, connection, model, true)
+    }
+
+    /// The write behind [`choose`](Self::choose) and [`choose_if_unchosen`](Self::choose_if_unchosen):
+    /// checks the tool and connection, and with `only_if_unchosen` stops when a choice exists. All
+    /// of it happens inside one store update. Returns whether the choice was written.
+    fn write_choice(
+        &self,
+        role: &Role,
+        connection: &ConnectionId,
+        model: &ModelId,
+        only_if_unchosen: bool,
+    ) -> Result<bool, AiError> {
         let binding = Binding {
             role: role.id.clone(),
             connection: connection.clone(),
@@ -143,10 +169,12 @@ impl ToolDesk {
                 .map_err(|e| AiError::invalid(e.to_string()))?;
             resolve(role, &[std::slice::from_ref(&binding)], &store.connections)
                 .map_err(|e| AiError::invalid(e.to_string()))?;
+            if only_if_unchosen && store.defaults.iter().any(|b| b.role == role.id) {
+                return Ok::<bool, AiError>(false);
+            }
             set_default(store, binding);
-            Ok::<(), AiError>(())
-        })??;
-        Ok(())
+            Ok(true)
+        })?
     }
 
     /// What could be chosen for every tool with no model chosen: the best connected one, on this
@@ -201,8 +229,11 @@ impl ToolDesk {
                     .push(skip("A model was chosen for this feature in the meantime."));
                 continue;
             }
-            match self.choose(role, &choice.connection, &choice.model) {
-                Ok(()) => done.bound.push(tool.clone()),
+            match self.choose_if_unchosen(role, &choice.connection, &choice.model) {
+                Ok(true) => done.bound.push(tool.clone()),
+                Ok(false) => done
+                    .skipped
+                    .push(skip("A model was chosen for this feature in the meantime.")),
                 Err(_) => done
                     .skipped
                     .push(skip("That model is no longer available.")),
