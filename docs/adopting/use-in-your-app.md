@@ -292,6 +292,9 @@ so you draw them and run the work on a thread:
 4. When `session.checked()` has files, `ToolDesk::adopt` makes them a model the tool can use. It
    accepts only checked files. It binds the tool only if no choice exists. If one does,
    `Adopted::kept` names it, so you can ask before calling `ToolDesk::choose`.
+5. `ToolDesk::start_sample` and `ToolDesk::finish` try it. A built-in selection model gets a click
+   on the test picture, because it reads clicks and not words. A selection that chose nothing
+   fails the test.
 
 Nothing in these steps binds a model, downloads anything or starts a job without the person
 pressing the button.

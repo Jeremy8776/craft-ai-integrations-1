@@ -9,8 +9,9 @@
 
 use std::time::{Duration, Instant};
 
-use craft_ai_core::job::Event;
+use craft_ai_core::job::{Event, Output};
 use craft_ai_core::role::resolve;
+use craft_ai_core::segment;
 use craft_ai_core::{
     AiError, AppId, Billing, Binding, ConnectionId, ConsentLedger, Disclosure, JobState, Locality,
     ModelId, Payload, Request, Role, RoleId, StoreFile,
@@ -18,7 +19,7 @@ use craft_ai_core::{
 use craft_ai_native::ConsentFile;
 use craft_ai_native::shared::SharedStore;
 
-use craft_ai_features::{Feature, setup_options};
+use craft_ai_features::{Feature, sample_request_for, setup_options};
 
 use crate::client::{AiClient, Choice, Job, RoleStatus};
 use crate::popup::MissingModel;
@@ -293,6 +294,23 @@ impl ToolDesk {
         Ok(TestStart::Started(self.client.start(&plan, &ledger)?))
     }
 
+    /// Starts the sample test that suits the tool's current choice. A built-in selection model
+    /// reads clicks, so it gets a click on the picture; every other route gets the description
+    /// sample. A tool with no choice made is refused before anything is sent, like
+    /// [`start_test`](Self::start_test).
+    pub fn start_sample(&self, feature: &Feature, agreed: bool) -> Result<TestStart, AiError> {
+        let role = feature
+            .role()
+            .ok_or_else(|| AiError::invalid("the tool id is not valid"))?;
+        let built_in = match self.client.local_route_for(&role) {
+            Ok(Some(route)) => feature.engines().contains(&route.provider.as_str()),
+            _ => false,
+        };
+        let request = sample_request_for(feature, built_in)
+            .ok_or_else(|| AiError::unsupported("there is no test for this tool yet"))?;
+        self.start_test(&role, request, agreed)
+    }
+
     /// Waits for a started sample and says whether it produced something of the right kind.
     pub fn finish(role: &Role, job: &Job, timeout: Duration) -> SampleReport {
         let started = Instant::now();
@@ -335,6 +353,20 @@ impl ToolDesk {
         if outputs.is_empty() {
             return SampleReport::Failed {
                 message: "the model finished but returned nothing".to_owned(),
+            };
+        }
+        // A selection that ran but chose nothing did not do the job, however well it answered.
+        let answers: Vec<Output> = done
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Output(o) => Some(o.clone()),
+                _ => None,
+            })
+            .collect();
+        if segment::read_found(&answers).is_some_and(|found| !found.matched) {
+            return SampleReport::Failed {
+                message: "the model ran but selected nothing in the test picture".to_owned(),
             };
         }
         let right_kind = outputs.iter().filter(|p| media_kind(p) == wanted).count();

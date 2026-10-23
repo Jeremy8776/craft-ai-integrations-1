@@ -15,5 +15,7 @@ FR = [
     ('start-always-downloads', C + 'setup_flow.rs', 'if self.plan.existing_directory().is_some() {\n            SetupTask::CheckExisting', 'if false {\n            SetupTask::CheckExisting', CL, 'first_run', 'start_checks_files'),
     ('suggested-folder-replaces-a-chosen-default', C + 'folders.rs', 'if let Some(default) = chosen.iter().find(|f| f.default) {', 'if let Some(default) = chosen.iter().find(|f| f.default && false) {', CL, 'first_run', 'suggested_folder_is_made_only_when'),
     ('adopt-forgets-the-kept-choice', C + 'local.rs', '            self.view(&role)?.bound\n', '            None\n', CL, 'first_run', 'adopting_checked_files'),
+    ('sample-ignores-the-route', C + 'tools.rs', 'Ok(Some(route)) => feature.engines().contains(&route.provider.as_str()),', 'Ok(Some(_)) => false,', CL, 'sample_route', 'built_in_route_is_tried'),
+    ('nothing-selected-still-passes', C + 'tools.rs', 'is_some_and(|found| !found.matched)', 'is_some_and(|found| false && !found.matched)', CL, 'sample_route', 'chose_nothing'),
     ('widget-always-shows-the-tick-box', 'crates/ai-egui/src/native_setup.rs', 'if needs_agreement {', 'if true {', EG, 'native_setup_first_run', 'no_licence_to_accept'),
 ]

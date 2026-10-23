@@ -31,7 +31,7 @@ pub use plan::{Blocker, InstalledFile, Inventory, Plan, State, plan, plan_native
 pub use recipe::{
     CloudOption, Component, Licence, LocalRecipe, ModelFile, NativeRoute, NodePack, Source,
 };
-pub use sample::{sample_is_costly, sample_request};
+pub use sample::{sample_is_costly, sample_request, sample_request_for};
 pub use setup::{
     Agreement, COMFYUI_TAG, PortableBuild, SetupOffer, SetupRoute, SetupStep, StepKind, agreement,
     agreement_for, gigabytes, is_official_build, portable_for, setup_offer, setup_offer_native,
