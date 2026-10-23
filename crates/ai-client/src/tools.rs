@@ -356,11 +356,12 @@ impl ToolDesk {
             };
         }
         // A selection that ran but chose nothing did not do the job, however well it answered.
+        // Only the small result-metadata outputs are copied, never a picture or video.
         let answers: Vec<Output> = done
             .events
             .iter()
             .filter_map(|e| match e {
-                Event::Output(o) => Some(o.clone()),
+                Event::Output(o) if is_metadata(&o.payload) => Some(o.clone()),
                 _ => None,
             })
             .collect();
@@ -380,6 +381,12 @@ impl ToolDesk {
             millis,
         }
     }
+}
+
+/// Whether `payload` is inline JSON, the form of a selection result (`segment::read_found`).
+fn is_metadata(payload: &Payload) -> bool {
+    matches!(payload, Payload::Inline { media_type, .. }
+        if media_type.as_str() == segment::FOUND_MEDIA_TYPE)
 }
 
 fn media_kind(payload: &Payload) -> String {
