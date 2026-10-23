@@ -15,7 +15,7 @@ FR = [
     ('start-always-downloads', C + 'setup_flow.rs', 'if existing.is_some() && existing != self.failed_check.as_deref() {\n            SetupTask::CheckExisting', 'if false {\n            SetupTask::CheckExisting', CL, 'first_run', 'start_checks_files'),
     ('suggested-folder-replaces-a-chosen-default', C + 'folders.rs', 'if let Some(default) = chosen.iter().find(|f| f.default) {', 'if let Some(default) = chosen.iter().find(|f| f.default && false) {', CL, 'first_run', 'suggested_folder_is_made_only_when'),
     ('adopt-forgets-the-kept-choice', C + 'local.rs', '            self.view(&role)?.bound\n', '            None\n', CL, 'first_run', 'adopting_checked_files'),
-    ('sample-ignores-the-route', C + 'tools.rs', 'Ok(Some(route)) => feature.engines().contains(&route.provider.as_str()),', 'Ok(Some(_)) => false,', CL, 'sample_route', 'built_in_route_is_tried'),
+    ('sample-ignores-the-route', C + 'tools.rs', 'feature.engines().contains(&route.provider.as_str())', 'false && feature.engines().contains(&route.provider.as_str())', CL, 'sample_route', 'built_in_route_is_tried'),
     ('nothing-selected-still-passes', C + 'tools.rs', 'is_some_and(|found| !found.matched)', 'is_some_and(|found| false && !found.matched)', CL, 'sample_route', 'chose_nothing'),
     ('widget-always-shows-the-tick-box', 'crates/ai-egui/src/native_setup.rs', 'if needs_agreement {', 'if true {', EG, 'native_setup_first_run', 'no_licence_to_accept'),
     ('failed-check-is-checked-again', C + 'setup_flow.rs', 'existing.is_some() && existing != self.failed_check.as_deref()', 'existing.is_some()', CL, 'setup_failed_check', 'after_a_failed_check_the_start'),
@@ -23,4 +23,5 @@ FR = [
     ('failed-download-counts-as-a-failed-check', C + 'setup_flow.rs', '(active.task == SetupTask::CheckExisting)', '(true)', CL, 'setup_failed_check', 'failed_download_does_not'),
     ('chosen-folder-needs-a-suggestion', C + 'folders.rs', 'if let Some(folder) = self.chosen_default()? {\n            return Ok(folder);\n        }\n        let suggested', 'if let Some(folder) = self.chosen_default()?.filter(|_| false) {\n            return Ok(folder);\n        }\n        let suggested', CL, 'lib', 'chosen_folder_needs_no_suggestion'),
     ('widget-picks-its-own-task', 'crates/ai-egui/src/native_setup.rs', 'craft_ai_client::SetupTask::CheckExisting => CHECK_FILES,', 'craft_ai_client::SetupTask::CheckExisting => DOWNLOAD_MODEL,', EG, 'native_setup_one_button', 'one_button_checks_them'),
+    ('custom-connection-gets-the-click', C + 'tools.rs', '&& route.connection.as_str()\n                        == crate::local::native_connection_id(&feature.id, &route.provider)', '', CL, 'sample_route', 'custom_connection_with_a_built_in'),
 ]
