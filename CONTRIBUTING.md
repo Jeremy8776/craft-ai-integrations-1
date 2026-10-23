@@ -3,6 +3,13 @@
 Thanks for helping with the Craft AI layer. `README.md` says what
 the crates are for and `docs/LAYOUT.md` says what lives where. Read both before a larger change.
 
+## Propose an integration
+
+For a vetted built-in model, connection, engine or workflow suggestion, start with
+[Propose an AI integration](docs/PROPOSE-AN-INTEGRATION.md). It creates a checked suggestion and an
+issue draft without changing anyone's custom setup. The [adoption guides](docs/adopting/README.md)
+cover the subsequent implementation.
+
 ## Branches and pull requests
 
 Changes reach `main` through a pull request. Nothing is pushed to it directly.

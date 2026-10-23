@@ -41,6 +41,10 @@ Your app owns the interface and the result. The shared layer owns everything bet
 
 ## Pick your path
 
+If you want to **suggest a vetted built-in** model, connection, engine or workflow, start at
+[Propose an AI integration](../PROPOSE-AN-INTEGRATION.md). This is a developer review path,
+not the person's custom setup described below.
+
 | I want to... | Read | Time |
 |---|---|---|
 | Add a tool that already exists (Select subject, Remove objects) to my app | [Use AI tools in your app](use-in-your-app.md) | 30 minutes to a first run |
