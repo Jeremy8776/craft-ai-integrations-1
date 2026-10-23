@@ -29,4 +29,7 @@ FR = [
     ('failed-download-counts-as-a-failed-check', C + 'setup_flow.rs', '(active.task == SetupTask::CheckExisting)', '(true)', CL, 'setup_failed_check', 'failed_download_does_not'),
     ('chosen-folder-needs-a-suggestion', C + 'folders.rs', 'if let Some(folder) = self.chosen_default()? {\n            return Ok(folder);\n        }\n        let suggested', 'if let Some(folder) = self.chosen_default()?.filter(|_| false) {\n            return Ok(folder);\n        }\n        let suggested', CL, 'lib', 'chosen_folder_needs_no_suggestion'),
     ('widget-picks-its-own-task', 'crates/ai-egui/src/native_setup.rs', 'craft_ai_client::SetupTask::CheckExisting => CHECK_FILES,', 'craft_ai_client::SetupTask::CheckExisting => DOWNLOAD_MODEL,', EG, 'native_setup_one_button', 'one_button_checks_them'),
+    ('missing-result-still-passes', C + 'tools.rs', 'if found.is_none() && role.capability.as_str() == segment::CAPABILITY {', 'if false && role.capability.as_str() == segment::CAPABILITY {', CL, 'sample_missing_result', 'no_result_beside_it'),
+    ('small-card-calls-a-quick-engine-slow', F + 'engine.rs', 'Some(g) if too_small(g, min_vram_mb) && offer.fast_on_processor => (', 'Some(g) if false && too_small(g, min_vram_mb) && offer.fast_on_processor => (', FE, 'engine_small_card', 'too_small_does_not_make'),
+    ('candle-always-reports-a-match', 'crates/ai-engine-candle/src/runner.rs', 'matched: score.is_some(),', 'matched: true,', 'craft-ai-engine-candle', 'lib', 'result_says_whether_anything'),
 ]

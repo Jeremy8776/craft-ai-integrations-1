@@ -12,6 +12,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
 
+use craft_ai_core::segment::{self, Found};
 use craft_ai_core::{
     AiError, CapabilityId, CapabilitySpec, ErrorKind, InputRole, ModelId, ModelInfo, Output,
     Payload, Request,
@@ -39,10 +40,12 @@ pub fn runners() -> Vec<Arc<dyn ModelRunner>> {
 pub struct Sam3Runner;
 
 impl ModelRunner for Sam3Runner {
+    /// The engine name on the connection.
     fn engine(&self) -> &str {
         ENGINE
     }
 
+    /// SAM 3, built in, with `image.segment` taking a picture and an optional prompt.
     fn model(&self) -> ModelInfo {
         let spec = |capability: CapabilityId| {
             CapabilitySpec::new(capability)
@@ -57,6 +60,7 @@ impl ModelRunner for Sam3Runner {
         info
     }
 
+    /// The card makers this build can use: Apple on a Mac, none elsewhere.
     fn accelerators(&self) -> &[GpuVendor] {
         if cfg!(target_os = "macos") {
             &[GpuVendor::Apple]
@@ -65,6 +69,8 @@ impl ModelRunner for Sam3Runner {
         }
     }
 
+    /// Loads SAM 3 from the folder that holds `model.safetensors` with its tokenizer files, or says
+    /// which files are missing and where to get them.
     fn load(&self, weights: &Path) -> Result<Box<dyn LoadedModel>, AiError> {
         let dir = weights.parent().filter(|_| {
             weights
@@ -86,6 +92,7 @@ impl ModelRunner for Sam3Runner {
     }
 }
 
+/// The id the catalogue gives this model.
 #[allow(clippy::expect_used)] // `sam3` is a valid id: a literal that cannot fail
 fn model_id() -> ModelId {
     ModelId::new(MODEL).expect("sam3 is a valid model id")
@@ -104,6 +111,8 @@ enum Prompt {
 }
 
 impl LoadedModel for Loaded {
+    /// Selects with SAM 3 from clicks or words and returns the mask, then what was found. The
+    /// picture is encoded once and kept, so a second click on it skips the slow part.
     fn run(&mut self, request: &Request, ctx: &RunContext) -> Result<Vec<Output>, AiError> {
         let (prompt, threshold) = read_prompt(request)?;
         let Some(source) = request
@@ -161,6 +170,7 @@ impl LoadedModel for Loaded {
         };
         ctx.progress(95);
 
+        let found = found_for(prediction.as_ref().map(|p| p.score));
         let (alpha, label) = match prediction {
             Some(p) => (
                 mask::alpha(&p.logits, crate::MASK_SIDE, picture.width, picture.height),
@@ -175,10 +185,23 @@ impl LoadedModel for Loaded {
             }
         };
         let png = encode_mask(&alpha, picture.width, picture.height)?;
-        Ok(vec![Output {
-            payload: Payload::inline("image/png", png)?,
-            label: Some(label),
-        }])
+        Ok(vec![
+            Output {
+                payload: Payload::inline("image/png", png)?,
+                label: Some(label),
+            },
+            segment::found_output(&found)?,
+        ])
+    }
+}
+
+/// The selection result sent beside the mask, as the `image.segment` contract asks of every
+/// route: matched with its score, or nothing found when the model gave no prediction.
+fn found_for(score: Option<f32>) -> Found {
+    Found {
+        matched: score.is_some(),
+        score,
+        name: None,
     }
 }
 
@@ -221,6 +244,8 @@ fn read_prompt(request: &Request) -> Result<(Prompt, f32), AiError> {
     }
 }
 
+/// Reads the clicks of a request: at most `MAX_POINTS`, each with x and y inside the picture and a
+/// positive flag. Anything else is refused.
 fn read_points(value: &Value) -> Result<Vec<Click>, AiError> {
     let wrong = || AiError::invalid("points must be a list of {x, y, positive} inside the picture");
     let list = value.as_array().ok_or_else(wrong)?;
@@ -253,11 +278,13 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// A selection request with a placeholder picture and no prompt yet.
     fn request() -> Request {
         Request::new(CapabilityId::parse("image.segment").unwrap())
             .with_input(InputRole::Source, Payload::text("x"))
     }
 
+    /// The runner is the Candle route the catalogue names, and it requires the picture.
     #[test]
     fn it_is_the_candle_sam3_the_catalogue_names() {
         let route = craft_ai_features::builtin()
@@ -274,6 +301,17 @@ mod tests {
             .spec_for(&CapabilityId::parse("image.segment").unwrap())
             .unwrap();
         assert!(spec.requires.contains(&InputRole::Source));
+    }
+
+    /// A prediction is reported as matched with its score, and no prediction as nothing found.
+    #[test]
+    fn the_result_says_whether_anything_was_selected() {
+        let hit = found_for(Some(0.8));
+        assert!(hit.matched && hit.score == Some(0.8));
+        let miss = found_for(None);
+        assert!(!miss.matched && miss.score.is_none());
+        let out = segment::found_output(&miss).unwrap();
+        assert!(!segment::read_found(&[out]).unwrap().matched);
     }
 
     #[test]

@@ -163,6 +163,13 @@ fn judge(profile: &SystemProfile, offer: &EngineOffer, min_vram_mb: Option<u32>)
         None => gpu_route(&offer.provider, profile.os, g.vendor),
     });
     let (pace, reason) = match gpu {
+        Some(g) if too_small(g, min_vram_mb) && offer.fast_on_processor => (
+            Pace::Processor,
+            format!(
+                "Your graphics card ({}) doesn't have enough memory for this, but it runs well on your computer's main chip.",
+                g.name
+            ),
+        ),
         Some(g) if too_small(g, min_vram_mb) => (
             Pace::Cpu,
             format!(

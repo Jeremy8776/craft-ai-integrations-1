@@ -365,7 +365,16 @@ impl ToolDesk {
                 _ => None,
             })
             .collect();
-        if segment::read_found(&answers).is_some_and(|found| !found.matched) {
+        // The contract gives every selection a result beside its mask, so a missing one is a
+        // route that does not follow it, not a pass.
+        let found = segment::read_found(&answers);
+        if found.is_none() && role.capability.as_str() == segment::CAPABILITY {
+            return SampleReport::Failed {
+                message: "the model returned a mask but did not say whether it selected anything"
+                    .to_owned(),
+            };
+        }
+        if found.is_some_and(|found| !found.matched) {
             return SampleReport::Failed {
                 message: "the model ran but selected nothing in the test picture".to_owned(),
             };
