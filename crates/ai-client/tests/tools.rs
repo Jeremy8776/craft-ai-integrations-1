@@ -574,3 +574,30 @@ fn choosing_only_if_unchosen_never_overwrites_a_choice_already_made() {
         cid("good-local")
     );
 }
+
+/// An intervening choice wins even when the model offered earlier has gone away. The rejected
+/// offer must not fail validation before noticing that another app already chose the tool.
+#[test]
+fn an_intervening_choice_wins_over_an_unavailable_offer() {
+    let w = world(vec![
+        connection("good-local", false, true, &["gpt-image-1"]),
+        connection("good-remote", true, true, &["gpt-image-1"]),
+    ]);
+    let role = tool("generate-image");
+    let model = image_model(&w);
+    w.desk.choose(&role, &cid("good-local"), &model).unwrap();
+    w.shared
+        .update(|store| {
+            store.connections.retain(|c| c.id != cid("good-remote"));
+        })
+        .unwrap();
+    assert!(
+        !w.desk
+            .choose_if_unchosen(&role, &cid("good-remote"), &model)
+            .unwrap()
+    );
+    assert_eq!(
+        w.desk.view(&role).unwrap().bound.unwrap().0,
+        cid("good-local")
+    );
+}

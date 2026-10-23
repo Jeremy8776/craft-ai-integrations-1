@@ -147,8 +147,8 @@ impl ToolDesk {
     }
 
     /// The write behind [`choose`](Self::choose) and [`choose_if_unchosen`](Self::choose_if_unchosen):
-    /// checks the tool and connection, and with `only_if_unchosen` stops when a choice exists. All
-    /// of it happens inside one store update. Returns whether the choice was written.
+    /// With `only_if_unchosen`, first stops when a choice exists; otherwise checks the tool and
+    /// proposed connection and writes under the same store lock. Returns whether it wrote.
     fn write_choice(
         &self,
         role: &Role,
@@ -164,14 +164,14 @@ impl ToolDesk {
         // Check inside the same store lock as the write: another app may change the tool or
         // connection between an unlocked read and the update.
         self.shared.update(|store| {
+            if only_if_unchosen && store.defaults.iter().any(|b| b.role == role.id) {
+                return Ok::<bool, AiError>(false);
+            }
             store
                 .check_tool(role)
                 .map_err(|e| AiError::invalid(e.to_string()))?;
             resolve(role, &[std::slice::from_ref(&binding)], &store.connections)
                 .map_err(|e| AiError::invalid(e.to_string()))?;
-            if only_if_unchosen && store.defaults.iter().any(|b| b.role == role.id) {
-                return Ok::<bool, AiError>(false);
-            }
             set_default(store, binding);
             Ok(true)
         })?
