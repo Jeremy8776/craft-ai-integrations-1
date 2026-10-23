@@ -291,8 +291,10 @@ so you draw them and run the work on a thread:
 3. One button calls `SetupSession::start`. It checks the files already on disk when there are
    complete ones, and downloads when there are not. When it does nothing, `SetupSession::blocker`
    says why (busy, no folder, agreement missing, this app cannot run it). If a check of the
-   files on disk fails, the next `start` downloads instead. Run the returned
-   `SetupRequest` with `SetupRequest::run` on a worker, and report progress and the answer with
+   files on disk fails, `blocker` asks for a new empty model folder. Use the host's folder picker
+   and `FolderDesk::add_new` and `set_default`, then review the new plan. The old files stay put.
+   Only the newly approved destination may be downloaded to. Run the returned `SetupRequest` with
+   `SetupRequest::run` on a worker, and report progress and the answer with
    `report_progress` and `complete`.
 4. When `session.checked()` has files, `ToolDesk::adopt` makes them a model the tool can use. It
    accepts only checked files. It binds the tool only if no choice exists. If one does,

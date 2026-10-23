@@ -25,7 +25,8 @@ FR = [
     ('quick-engine-still-called-slow', F + 'engine.rs', 'None if offer.fast_on_processor => (', 'None if false && offer.fast_on_processor => (', FE, 'engine_default', 'quick_on_the_main_chip'),
     ('widget-always-shows-the-tick-box', 'crates/ai-egui/src/native_setup.rs', 'if needs_agreement {', 'if true {', EG, 'native_setup_first_run', 'no_licence_to_accept'),
     ('failed-check-is-checked-again', C + 'setup_flow.rs', 'existing.is_some() && existing != self.failed_check.as_deref()', 'existing.is_some()', CL, 'setup_failed_check', 'after_a_failed_check_the_start'),
-    ('failed-check-is-forgotten', C + 'setup_flow.rs', 'self.problem = Some(error.kind);\n                self.failed_check = failed_check;', 'self.problem = Some(error.kind);', CL, 'setup_failed_check', 'after_a_failed_check_the_start'),
+    ('failed-check-is-forgotten', C + 'setup_flow.rs', 'self.problem = Some(error.kind);\n                if !active.fresh_download {', 'self.problem = Some(error.kind);\n                if false {', CL, 'setup_failed_check', 'after_a_failed_check_the_start'),
+    ('failed-recovery-check-is-forgotten', C + 'setup_flow.rs', 'self.problem = Some(error.kind);\n                if !active.fresh_download {', 'self.problem = Some(error.kind);\n                if true {', CL, 'setup_recovery_folder', 'failed_fresh_download'),
     ('failed-download-counts-as-a-failed-check', C + 'setup_flow.rs', '(active.task == SetupTask::CheckExisting)', '(true)', CL, 'setup_failed_check', 'failed_download_does_not'),
     ('chosen-folder-needs-a-suggestion', C + 'folders.rs', 'if let Some(folder) = self.chosen_default()? {\n            return Ok(folder);\n        }\n        let suggested', 'if let Some(folder) = self.chosen_default()?.filter(|_| false) {\n            return Ok(folder);\n        }\n        let suggested', CL, 'lib', 'chosen_folder_needs_no_suggestion'),
     ('widget-picks-its-own-task', 'crates/ai-egui/src/native_setup.rs', 'craft_ai_client::SetupTask::CheckExisting => CHECK_FILES,', 'craft_ai_client::SetupTask::CheckExisting => DOWNLOAD_MODEL,', EG, 'native_setup_one_button', 'one_button_checks_them'),
@@ -35,4 +36,7 @@ FR = [
     ('custom-connection-gets-the-click', C + 'tools.rs', '&& route.connection.as_str()\n                        == crate::local::native_connection_id(&feature.id, &route.provider)', '', CL, 'sample_route', 'custom_connection_with_a_built_in'),
     ('suggested-folder-path-hidden', 'crates/ai-egui/src/native_setup.rs', 'ui.label(format!("Suggested folder: {}", suggested.to_string_lossy()));', '', EG, 'native_setup_first_run', 'suggested_folder_is_shown'),
     ('suggested-folder-active-while-busy', 'crates/ai-egui/src/native_setup.rs', 'plan.available() && !session.busy()', 'plan.available()', EG, 'native_setup_first_run', 'busy_session_cannot_take'),
+    ('recovery-uses-old-folder', C + 'setup_flow.rs', 'self.failed_check.as_ref().is_some_and(|failed| {', 'false && self.failed_check.as_ref().is_some_and(|failed| {', CL, 'setup_recovery_folder', 'bad_same_size_file'),
+    ('recovery-uses-preselected-folder', C + 'setup_flow.rs', 'self.failed_destination.as_deref() == Some(destination)', 'false', CL, 'setup_recovery_folder', 'preselected_other_folder'),
+    ('recovery-overwrites-intervening-file', C + 'folders/setup.rs', 'std::fs::create_dir(destination)', 'std::fs::create_dir_all(destination)', CL, 'setup_recovery_folder', 'intervening_file'),
 ]
