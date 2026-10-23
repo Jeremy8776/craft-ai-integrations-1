@@ -149,12 +149,14 @@ impl ToolDesk {
         Ok(())
     }
 
-    /// Gives every tool with no model chosen the best one that is connected: one on this computer
-    /// first, then the first hosted one. A choice the person made is never touched, even one that
-    /// no longer works, so what they picked is still there when the connection comes back. Returns
-    /// the tools bound now.
-    pub fn auto_bind(&self, roles: &[Role]) -> Result<Vec<RoleId>, AiError> {
-        let mut bound = Vec::new();
+    /// What could be chosen for every tool with no model chosen: the best connected one, on this
+    /// computer first, then the first hosted one. **Nothing is written.** A choice is made only
+    /// when the person says yes to the list: show it, then pass it to
+    /// [`accept_recommended`](Self::accept_recommended), which applies exactly what was shown and
+    /// skips any tool that got a choice in the meantime. A choice the person made is never offered
+    /// over, even one that no longer works, so it is still there when the connection comes back.
+    pub fn auto_bind_offer(&self, roles: &[Role]) -> Result<Vec<(RoleId, Choice)>, AiError> {
+        let mut offer = Vec::new();
         for role in roles {
             let view = self.view(role)?;
             if view.bound.is_some() {
@@ -166,11 +168,10 @@ impl ToolDesk {
                 .find(|c| c.locality == Locality::Local)
                 .or_else(|| view.choices.first());
             if let Some(choice) = pick {
-                self.choose(role, &choice.connection, &choice.model)?;
-                bound.push(role.id.clone());
+                offer.push((role.id.clone(), choice.clone()));
             }
         }
-        Ok(bound)
+        Ok(offer)
     }
 
     /// The person said yes to "use the recommended models for N features?": makes each offered

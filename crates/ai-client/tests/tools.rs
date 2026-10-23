@@ -386,24 +386,43 @@ fn roles(ids: &[&str]) -> Vec<Role> {
     ids.iter().map(|i| tool(i)).collect()
 }
 
+/// Applies what the person agreed to: the offer for `ids`, through `accept_recommended`.
+fn say_yes(w: &World, ids: &[&str]) -> craft_ai_client::Accepted {
+    let all = roles(ids);
+    let offer = w.desk.auto_bind_offer(&all).unwrap();
+    w.desk.accept_recommended(&all, &offer).unwrap()
+}
+
+/// Offering a model for an unchosen tool writes nothing; the choice is made only on a yes.
 #[test]
-fn auto_bind_gives_an_unchosen_tool_the_model_that_is_connected() {
+fn an_offer_for_an_unchosen_tool_writes_nothing_until_the_person_says_yes() {
     let w = world(vec![connection(
         "good-local",
         false,
         true,
         &["gpt-image-1"],
     )]);
-    let bound = w
-        .desk
-        .auto_bind(&roles(&["generate-image", "generate-video"]))
-        .unwrap();
-    let ids: Vec<_> = bound.iter().map(|r| r.as_str()).collect();
+    let all = roles(&["generate-image", "generate-video"]);
+    let offer = w.desk.auto_bind_offer(&all).unwrap();
+    let ids: Vec<_> = offer.iter().map(|(r, _)| r.as_str()).collect();
     assert_eq!(
         ids,
         ["generate-image"],
         "the video tool has nothing that can do it"
     );
+    assert!(
+        w.shared.load().unwrap().defaults.is_empty(),
+        "an offer binds nothing"
+    );
+    assert!(
+        w.desk
+            .view(&tool("generate-image"))
+            .unwrap()
+            .bound
+            .is_none()
+    );
+    let done = w.desk.accept_recommended(&all, &offer).unwrap();
+    assert_eq!(done.bound.len(), 1);
     let view = w.desk.view(&tool("generate-image")).unwrap();
     assert_eq!(view.bound.map(|(c, _)| c), Some(cid("good-local")));
     assert!(matches!(view.status, RoleStatus::Ready(_)));
@@ -416,13 +435,14 @@ fn auto_bind_gives_an_unchosen_tool_the_model_that_is_connected() {
     );
 }
 
+/// The offer prefers a model on this computer to a hosted service.
 #[test]
-fn auto_bind_prefers_this_computer_to_a_hosted_service() {
+fn the_offer_prefers_this_computer_to_a_hosted_service() {
     let w = world(vec![
         connection("good-remote", true, true, &["gpt-image-1"]),
         connection("good-local", false, true, &["gpt-image-1"]),
     ]);
-    w.desk.auto_bind(&roles(&["generate-image"])).unwrap();
+    say_yes(&w, &["generate-image"]);
     let bound = w.desk.view(&tool("generate-image")).unwrap().bound.unwrap();
     assert_eq!(
         bound.0,
@@ -431,8 +451,9 @@ fn auto_bind_prefers_this_computer_to_a_hosted_service() {
     );
 }
 
+/// A choice the person made is never offered over, even one that stopped working.
 #[test]
-fn auto_bind_never_touches_a_choice_the_person_made() {
+fn the_offer_never_covers_a_choice_the_person_made() {
     let w = world(vec![
         connection("good-remote", true, true, &["gpt-image-1"]),
         connection("good-local", false, true, &["gpt-image-1"]),
@@ -443,7 +464,7 @@ fn auto_bind_never_touches_a_choice_the_person_made() {
         .unwrap();
     assert!(
         w.desk
-            .auto_bind(&roles(&["generate-image"]))
+            .auto_bind_offer(&roles(&["generate-image"]))
             .unwrap()
             .is_empty()
     );
@@ -462,7 +483,7 @@ fn auto_bind_never_touches_a_choice_the_person_made() {
         .unwrap();
     assert!(
         w.desk
-            .auto_bind(&roles(&["generate-image"]))
+            .auto_bind_offer(&roles(&["generate-image"]))
             .unwrap()
             .is_empty()
     );
@@ -477,14 +498,15 @@ fn auto_bind_never_touches_a_choice_the_person_made() {
     );
 }
 
+/// A switched-off connection is not offered, and once accepted nothing more is offered.
 #[test]
-fn auto_bind_ignores_a_connection_that_is_switched_off_and_a_second_run_changes_nothing() {
+fn the_offer_ignores_a_connection_that_is_switched_off_and_a_second_run_offers_nothing() {
     let w = world(vec![
         connection("good-off", false, false, &["gpt-image-1"]),
         connection("good-remote", true, true, &["gpt-image-1"]),
     ]);
-    let first = w.desk.auto_bind(&roles(&["generate-image"])).unwrap();
-    assert_eq!(first.len(), 1);
+    let first = say_yes(&w, &["generate-image"]);
+    assert_eq!(first.bound.len(), 1);
     assert_eq!(
         w.desk
             .view(&tool("generate-image"))
@@ -496,7 +518,7 @@ fn auto_bind_ignores_a_connection_that_is_switched_off_and_a_second_run_changes_
     );
     assert!(
         w.desk
-            .auto_bind(&roles(&["generate-image"]))
+            .auto_bind_offer(&roles(&["generate-image"]))
             .unwrap()
             .is_empty()
     );
