@@ -165,3 +165,32 @@ fn a_custom_connection_with_a_built_in_engine_name_gets_the_description() {
     assert!(segment::description(&request).is_some());
     assert!(segment::clicks(&request).unwrap().is_empty());
 }
+
+/// Connection management can put another model under the built-in connection's id. Only the model
+/// the engine's recipe names gets the click; another one may need words.
+#[test]
+fn another_model_under_the_built_in_connection_gets_the_description() {
+    let dir = tempfile::tempdir().unwrap();
+    let (desk, shared, seen) = desk(&dir, true);
+    let weights = dir.path().join("encoder.onnx");
+    std::fs::write(&weights, b"x").unwrap();
+    let f = select_subject();
+    desk.enable_native_with(&f, "rten", &weights).unwrap();
+    let swapped = ModelId::new("sam-2.1-fp16").unwrap();
+    shared
+        .update(|store| {
+            for connection in &mut store.connections {
+                for model in &mut connection.models {
+                    model.id = swapped.clone();
+                }
+            }
+            for binding in &mut store.defaults {
+                binding.model = swapped.clone();
+            }
+        })
+        .unwrap();
+    assert!(matches!(run(&desk, &f), SampleReport::Passed { .. }));
+    let request = seen.lock().unwrap().pop().unwrap();
+    assert!(segment::description(&request).is_some());
+    assert!(segment::clicks(&request).unwrap().is_empty());
+}

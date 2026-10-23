@@ -302,14 +302,24 @@ impl ToolDesk {
         let role = feature
             .role()
             .ok_or_else(|| AiError::invalid("the tool id is not valid"))?;
-        // Built in means the connection this suite saves for the engine, not any connection that
-        // reuses the engine's name: a custom one may need words, which a click sample lacks.
+        // Built in means the connection this suite saves for the engine, holding the model the
+        // engine's recipe names: a custom connection may reuse the name, and connection
+        // management can put another model under that id, either of which may need words the
+        // click sample lacks.
         let built_in = match self.client.local_route_for(&role) {
-            Ok(Some(route)) => {
-                feature.engines().contains(&route.provider.as_str())
-                    && route.connection.as_str()
+            Ok(Some(route)) => feature
+                .engine_recipe(&route.provider)
+                .and_then(|recipe| {
+                    recipe
+                        .native
+                        .iter()
+                        .find(|native| native.provider == route.provider)
+                })
+                .is_some_and(|native| {
+                    route.connection.as_str()
                         == crate::local::native_connection_id(&feature.id, &route.provider)
-            }
+                        && route.model.as_str() == native.model
+                }),
             _ => false,
         };
         let request = sample_request_for(feature, built_in)
