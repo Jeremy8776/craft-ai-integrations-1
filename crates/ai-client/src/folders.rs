@@ -109,10 +109,22 @@ impl FolderDesk {
     /// whole of "pick a place" for a person who accepts the suggestion, and it never moves or
     /// changes a folder they already chose.
     pub fn ensure_default(&self) -> Result<ModelFolder, AiError> {
-        let suggested = craft_ai_native::paths::suggested_models_dir().ok_or_else(|| {
+        self.ensure_default_suggesting(craft_ai_native::paths::suggested_models_dir())
+    }
+
+    /// [`ensure_default`](Self::ensure_default) with the computer's suggestion given, or `None`
+    /// when it has none. A folder the person already chose is returned without needing one.
+    fn ensure_default_suggesting(
+        &self,
+        suggested: Option<std::path::PathBuf>,
+    ) -> Result<ModelFolder, AiError> {
+        if let Some(folder) = self.chosen_default()? {
+            return Ok(folder);
+        }
+        let suggested = suggested.ok_or_else(|| {
             AiError::invalid("this computer gives no place for app files; choose a model folder")
         })?;
-        self.ensure_default_at(&suggested)
+        Ok(self.add_new(&suggested, Some("ArtCraft models"))?.folder)
     }
 
     /// [`ensure_default`](Self::ensure_default) with the suggested folder given. Returns the
@@ -120,19 +132,29 @@ impl FolderDesk {
     /// default, the first becomes the default. With none, `suggested` is made and registered. A
     /// folder read from another program is never made the default.
     pub fn ensure_default_at(&self, suggested: &Path) -> Result<ModelFolder, AiError> {
+        if let Some(folder) = self.chosen_default()? {
+            return Ok(folder);
+        }
+        Ok(self.add_new(suggested, Some("ArtCraft models"))?.folder)
+    }
+
+    /// The default among the folders the person chose: the one marked default, else the first
+    /// chosen folder, which is then marked. `None` when they chose none. Needs no suggestion, so
+    /// a computer that suggests no place still finds a folder the person already has.
+    fn chosen_default(&self) -> Result<Option<ModelFolder>, AiError> {
         let chosen: Vec<ModelFolder> = self
             .list()?
             .into_iter()
             .filter(|f| f.origin == FolderOrigin::Chosen)
             .collect();
         if let Some(default) = chosen.iter().find(|f| f.default) {
-            return Ok(default.clone());
+            return Ok(Some(default.clone()));
         }
         if let Some(first) = chosen.first() {
             self.set_default(&first.id)?;
-            return self.find(&first.id);
+            return self.find(&first.id).map(Some);
         }
-        Ok(self.add_new(suggested, Some("ArtCraft models"))?.folder)
+        Ok(None)
     }
 
     /// Reads the folder again, for files added or moved since. Replaces its map.
@@ -292,6 +314,8 @@ fn unique_id(name: &str, taken: &[ModelFolder]) -> String {
 mod tests {
     use super::*;
 
+    /// Two spellings of one place are the same folder only where the file system ignores case,
+    /// and a trailing separator never makes a different place.
     #[test]
     fn case_matters_only_where_the_file_system_says_so() {
         let upper = same_place_key(Path::new("/No/Such/Models"));
@@ -302,6 +326,20 @@ mod tests {
             lower,
             "a trailing separator never makes a different place"
         );
+    }
+
+    /// With no suggestion from the computer, a folder the person chose is still the default, and
+    /// only a person with no folder at all is told to choose one.
+    #[test]
+    fn a_chosen_folder_needs_no_suggestion() {
+        let dir = tempfile::tempdir().unwrap();
+        let desk = FolderDesk::new(SharedStore::new(dir.path().join("connections.json")));
+        assert!(desk.ensure_default_suggesting(None).is_err());
+        let models = dir.path().join("models");
+        let chosen = desk.add_new(&models, None).unwrap().folder;
+        let found = desk.ensure_default_suggesting(None).unwrap();
+        assert_eq!(found.id, chosen.id);
+        assert!(found.default, "the only chosen folder becomes the default");
     }
 
     #[test]

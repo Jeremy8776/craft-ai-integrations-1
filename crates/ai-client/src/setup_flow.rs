@@ -1,6 +1,7 @@
 //! Reusable setup state for any host UI. Approval and worker answers belong to one exact plan.
 use crate::{CheckedNative, NativeSetupPlan};
 use craft_ai_core::{AiError, ErrorKind};
+use std::path::PathBuf;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -94,6 +95,9 @@ pub struct SetupSession {
     checked: Option<CheckedNative>,
     problem: Option<ErrorKind>,
     progress: Option<(usize, crate::SetupProgress)>,
+    /// The folder whose existing files failed their check. The start button stops offering a
+    /// check of that folder and downloads instead, so a damaged copy is not a dead end.
+    failed_check: Option<PathBuf>,
 }
 impl SetupSession {
     /// A session for `plan` with nothing approved and nothing running.
@@ -106,6 +110,7 @@ impl SetupSession {
             checked: None,
             problem: None,
             progress: None,
+            failed_check: None,
         }
     }
     /// The plan under review.
@@ -179,6 +184,7 @@ impl SetupSession {
         self.checked = None;
         self.problem = None;
         self.progress = None;
+        self.failed_check = None;
         previous
     }
     /// Whether `directory` is one the plan stands for: where it found complete files, or where a
@@ -218,9 +224,12 @@ impl SetupSession {
         Some(request)
     }
     /// What one start button does now: check the complete files already on disk when there are
-    /// any, otherwise download. A host that wants one click shows this and calls [`start`](Self::start).
+    /// any, otherwise download. Files that already failed their check are not checked again: the
+    /// button downloads instead, which replaces what does not match. A host that wants one click
+    /// shows this and calls [`start`](Self::start).
     pub fn next_task(&self) -> SetupTask {
-        if self.plan.existing_directory().is_some() {
+        let existing = self.plan.existing_directory();
+        if existing.is_some() && existing != self.failed_check.as_deref() {
             SetupTask::CheckExisting
         } else {
             SetupTask::Download
@@ -274,6 +283,9 @@ impl SetupSession {
         let expected = directory
             .zip(active.plan.route().weights())
             .map(|(dir, file)| dir.join(&file.filename));
+        let failed_check = (active.task == SetupTask::CheckExisting)
+            .then(|| active.plan.existing_directory().map(PathBuf::from))
+            .flatten();
         match result {
             Ok(checked)
                 if checked.feature() == active.plan.feature()
@@ -284,14 +296,17 @@ impl SetupSession {
                 // quietly: it is not an error, and the old directory is not offered.
                 let current = self.is_current(checked.weights().parent());
                 self.checked = current.then_some(checked);
+                self.failed_check = None;
             }
             Ok(_) => {
                 self.checked = None;
                 self.problem = Some(ErrorKind::InvalidRequest);
+                self.failed_check = failed_check;
             }
             Err(error) => {
                 self.checked = None;
                 self.problem = Some(error.kind);
+                self.failed_check = failed_check;
             }
         }
         true
