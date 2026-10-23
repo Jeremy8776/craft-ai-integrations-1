@@ -112,6 +112,9 @@ pub fn native_model_setup(ui: &mut Ui, session: &mut SetupSession) -> Option<Nat
     if let Some(kind) = session.problem() {
         ui.colored_label(ui.visuals().warn_fg_color, setup_problem(kind));
     }
+    if session.blocker() == Some(craft_ai_client::SetupBlock::NeedsFreshFolder) {
+        ui.label("These files did not pass their check. Choose a new empty model folder for the download. The old files will be left alone.");
+    }
     if !plan.available() {
         ui.label("This app can't use this option yet. Choose another option.");
     }
