@@ -26,6 +26,10 @@ impl AiClient {
                 provider: p.to_owned(),
                 adapter_present: self.has_adapter(p),
                 accelerators: self.declared_accelerators(p),
+                fast_on_processor: feature
+                    .engine_recipe(p)
+                    .and_then(|r| r.native.iter().find(|n| n.provider == p))
+                    .is_some_and(|n| n.fast_on_processor),
             })
             .collect();
         advise(profile, &offers, recipe.min_vram_mb)

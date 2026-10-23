@@ -36,6 +36,7 @@ fn offers(present: &[&str]) -> Vec<EngineOffer> {
             provider: (*p).to_owned(),
             adapter_present: present.contains(p),
             accelerators: None,
+            fast_on_processor: false,
         })
         .collect()
 }
@@ -255,6 +256,7 @@ fn the_second_card_counts_when_the_first_has_no_route() {
     );
 }
 
+/// An engine the table does not know has no graphics route, so a known card engine beats it.
 #[test]
 fn an_unknown_engine_is_never_suggested_over_a_known_gpu_one() {
     assert!(!gpu_route("tract", Os::Windows, GpuVendor::Nvidia));
@@ -270,6 +272,7 @@ fn an_unknown_engine_is_never_suggested_over_a_known_gpu_one() {
             provider: "tract".to_owned(),
             adapter_present: true,
             accelerators: None,
+            fast_on_processor: false,
         },
     );
     let advice = advise(&m, &o, None);

@@ -326,6 +326,15 @@ impl AiClient {
         if let Err(e) = secret_for(&*self.secrets, resolved.connection) {
             return unavailable(e.message);
         }
+        // A model run from a file on this computer is not ready once the file has gone.
+        if let Some(file) = resolved.model.local_file.as_deref()
+            && !std::path::Path::new(file).is_file()
+        {
+            return unavailable(
+                "The file for the model you chose is no longer there. Open Set up AI to fix it."
+                    .to_owned(),
+            );
+        }
         RoleStatus::Ready(RoleReady {
             connection: resolved.connection.id.clone(),
             connection_label: resolved.connection.label.clone(),

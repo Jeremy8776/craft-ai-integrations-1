@@ -44,9 +44,15 @@ pub(crate) fn connection_groups(
     store: &StoreFile,
     role: &Role,
     selected: Option<&Binding>,
+    options: &[SetupOption],
 ) -> Vec<PickerGroup> {
     let mut groups = Vec::new();
     for connection in &store.connections {
+        // Its weights are gone and a set-up option replaces it (see `unset_groups`): listing it
+        // here as well would offer the same model twice, once as ready and once to set up again.
+        if files_gone(connection, role, options) {
+            continue;
+        }
         let models: Vec<PickerModel> = connection
             .models
             .iter()
@@ -95,6 +101,33 @@ pub(crate) fn connection_groups(
         });
     }
     groups
+}
+
+/// Whether `connection` is a built-in model of this tool whose every weights file has gone, and
+/// some set-up option stands for it, so the person is offered a fresh set-up in its place.
+fn files_gone(connection: &Connection, role: &Role, options: &[SetupOption]) -> bool {
+    if connection.locality != Locality::Local {
+        return false;
+    }
+    let fitted: Vec<&ModelInfo> = connection
+        .models
+        .iter()
+        .filter(|m| fits(role, m).is_some())
+        .collect();
+    let all_missing = !fitted.is_empty()
+        && fitted.iter().all(|m| {
+            m.local_file
+                .as_deref()
+                .is_some_and(|file| !Path::new(file).is_file())
+        });
+    all_missing
+        && options.iter().any(|o| {
+            o.usable
+                && o.unlocks.iter().any(|u| role.id.as_str() == u)
+                && matches!(&o.route, Route::Native { feature, provider, .. }
+                    if *provider == connection.provider
+                        && connection.id.as_str() == native_connection_id(feature, provider))
+        })
 }
 
 /// Providers that could do the tool and are not set up, greyed rather than hidden. A model that
@@ -181,7 +214,12 @@ pub(crate) fn unset_groups(
                     } else {
                         "Not installed. Runs on this computer."
                     };
-                    (Some(Locality::Local), GroupState::NotSetUp, note.to_owned())
+                    // What the route cannot do (selects by clicking) is said before it is chosen.
+                    (
+                        Some(Locality::Local),
+                        GroupState::NotSetUp,
+                        format!("{note} {}", option.note),
+                    )
                 } else {
                     (
                         Some(Locality::Local),
@@ -226,7 +264,12 @@ fn describe(connection: &Connection, model: &ModelInfo, role: &Role) -> String {
         line.push_str(cost);
     }
     line.push('.');
-    if let Some(spec) = model.spec_for(&role.capability) {
+    // A built-in route says what it cannot do in place of the list of inputs, which would offer a
+    // prompt the route refuses.
+    if let Some(note) = built_in_note(connection, model) {
+        line.push(' ');
+        line.push_str(&note);
+    } else if let Some(spec) = model.spec_for(&role.capability) {
         let mut inputs: Vec<&InputRole> = spec.accepts.keys().collect();
         inputs.sort_by_key(|i| input_rank(i));
         let names: Vec<String> = inputs.into_iter().map(input_name).collect();
@@ -237,6 +280,16 @@ fn describe(connection: &Connection, model: &ModelInfo, role: &Role) -> String {
         }
     }
     line
+}
+
+/// The catalogue's note for the built-in route that `connection` runs `model` on, if it has one.
+fn built_in_note(connection: &Connection, model: &ModelInfo) -> Option<String> {
+    craft_ai_features::builtin()
+        .into_iter()
+        .flat_map(|f| f.locals)
+        .flat_map(|r| r.native)
+        .find(|n| n.provider == connection.provider && n.model == model.id.as_str())
+        .and_then(|n| n.note)
 }
 
 fn input_rank(role: &InputRole) -> u8 {

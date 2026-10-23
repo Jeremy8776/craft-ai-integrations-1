@@ -90,6 +90,8 @@ pub(super) fn sam3() -> LocalRecipe {
                 model: "sam3".to_owned(),
                 label: "SAM 3, built in (Apple graphics, otherwise the processor)".to_owned(),
                 models: sam3_transformers_files(),
+                note: None,
+                fast_on_processor: false,
             },
             NativeRoute {
                 provider: "burn".to_owned(),
@@ -98,6 +100,8 @@ pub(super) fn sam3() -> LocalRecipe {
                 // offer a 3.4 GB download.
                 label: "SAM 3, built in (any graphics card)".to_owned(),
                 models: Vec::new(),
+                note: None,
+                fast_on_processor: false,
             },
         ],
         components: Vec::new(),

@@ -17,5 +17,11 @@ FR = [
     ('adopt-forgets-the-kept-choice', C + 'local.rs', '            self.view(&role)?.bound\n', '            None\n', CL, 'first_run', 'adopting_checked_files'),
     ('sample-ignores-the-route', C + 'tools.rs', 'Ok(Some(route)) => feature.engines().contains(&route.provider.as_str()),', 'Ok(Some(_)) => false,', CL, 'sample_route', 'built_in_route_is_tried'),
     ('nothing-selected-still-passes', C + 'tools.rs', 'is_some_and(|found| !found.matched)', 'is_some_and(|found| false && !found.matched)', CL, 'sample_route', 'chose_nothing'),
+    ('status-ignores-a-missing-file', C + 'client.rs', '&& !std::path::Path::new(file).is_file()', '&& false', CL, 'first_run_state', 'file_is_gone_is_not_ready'),
+    ('picker-lists-a-gone-model-twice', C + 'picker_groups.rs', 'if files_gone(connection, role, options) {', 'if false {', CL, 'first_run_state', 'file_is_gone_is_not_ready'),
+    ('route-note-dropped-from-the-option', F + 'options.rs', 'note: native.note.clone().unwrap_or_default(),', 'note: String::new(),', CL, 'first_run_state', 'clicks_only_route_says_so'),
+    ('route-note-dropped-from-the-row', C + 'picker_groups.rs', '.and_then(|n| n.note)', '.and_then(|_| None)', CL, 'first_run_state', 'clicks_only_route_says_so'),
+    ('card-engine-outranks-the-default', F + 'engine.rs', 'Some(Pace::Gpu | Pace::Processor) => 0,', 'Some(Pace::Gpu) => 0,\n        Some(Pace::Processor) => 1,', FE, 'engine_default', 'quick_on_the_main_chip'),
+    ('quick-engine-still-called-slow', F + 'engine.rs', 'None if offer.fast_on_processor => (', 'None if false && offer.fast_on_processor => (', FE, 'engine_default', 'quick_on_the_main_chip'),
     ('widget-always-shows-the-tick-box', 'crates/ai-egui/src/native_setup.rs', 'if needs_agreement {', 'if true {', EG, 'native_setup_first_run', 'no_licence_to_accept'),
 ]

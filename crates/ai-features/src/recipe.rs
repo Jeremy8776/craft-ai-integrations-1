@@ -107,6 +107,15 @@ pub struct NativeRoute {
     /// recorded on the connection; the rest sit beside it. Empty means the recipe's own files.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub models: Vec<ModelFile>,
+    /// One plain sentence on what this route cannot do, shown beside it in setup and in the picker
+    /// (a route that selects by clicking says so). `None` when there is nothing to add.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// Measured quick enough on the computer's main chip, so engine advice does not call it slow
+    /// for lack of a graphics card. A curated statement, stated with its evidence in
+    /// `docs/STATUS.md`; false means nothing was measured.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fast_on_processor: bool,
 }
 
 impl NativeRoute {

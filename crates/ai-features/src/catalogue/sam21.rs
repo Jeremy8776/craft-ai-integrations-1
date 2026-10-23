@@ -98,6 +98,10 @@ pub(super) fn sam21() -> LocalRecipe {
                 model: "sam21".to_owned(),
                 label: "SAM 2.1, built in (the processor, on any system)".to_owned(),
                 models: sam21_onnx_files(),
+                note: Some("Selects by clicking on the picture, not by a description.".to_owned()),
+                // About 35 ms a click after a first look of about 0.7 s, one Windows machine, one
+                // picture (docs/STATUS.md). Not a benchmark.
+                fast_on_processor: true,
             },
             // The same published files, converted once on this computer to the saved copy this
             // engine reads (`craft-ai-burn-setup`). Nothing converted is hosted, so the download is
@@ -109,6 +113,8 @@ pub(super) fn sam21() -> LocalRecipe {
                 label: "SAM 2.1, built in (any graphics card, set up once on this computer)"
                     .to_owned(),
                 models: sam21_onnx_files(),
+                note: Some("Selects by clicking on the picture, not by a description.".to_owned()),
+                fast_on_processor: false,
             },
         ],
         components: components(),

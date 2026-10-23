@@ -31,6 +31,8 @@ fn route(files: &[&str]) -> NativeRoute {
         model: "m".to_owned(),
         label: "m".to_owned(),
         models: files.iter().map(|f| file(f)).collect(),
+        note: None,
+        fast_on_processor: false,
     }
 }
 

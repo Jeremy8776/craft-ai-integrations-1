@@ -286,6 +286,8 @@ fn runtime_named_like_a_recipe() -> Feature {
         model: "sam3".into(),
         label: "Custom".into(),
         models: Vec::new(),
+        note: None,
+        fast_on_processor: false,
     });
     f
 }

@@ -33,7 +33,9 @@ pub struct SetupOption {
     /// Stable: `local:<feature>:<recipe>`, `native:<feature>:<provider>` or `service:<preset>`.
     pub id: String,
     pub title: String,
-    /// One line about it. Empty for a local model, whose wording depends on the computer.
+    /// One line about it. For a local model, only what its route says it cannot do (a built-in
+    /// route that selects by clicking says so); otherwise empty, because the rest of the wording
+    /// depends on the computer.
     pub note: String,
     pub route: Route,
     /// Ids of the features it switches on, in catalogue order.
@@ -82,7 +84,7 @@ pub fn setup_options(features: &[Feature]) -> Vec<SetupOption> {
             natives.push(SetupOption {
                 id: format!("native:{}:{}", feature.id, native.provider),
                 title: native.label.clone(),
-                note: String::new(),
+                note: native.note.clone().unwrap_or_default(),
                 route: Route::Native {
                     feature: feature.id.clone(),
                     provider: native.provider.clone(),
