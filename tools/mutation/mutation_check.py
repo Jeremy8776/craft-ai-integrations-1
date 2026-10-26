@@ -321,7 +321,7 @@ V1 = [
     ('status-reads-one-fixed-app', CLIENT, STATUS_RESOLVE, 'let resolved = match store.resolve(&AppId::new("launcher").unwrap_or_else(|_| self.app.clone()), role) {', CL, 'one_binding', ''),
     ('unbound-reads-as-broken', ROLE, "Self::Unbound(r) => write!(f, \"no model is chosen for '{r}'\"),", "Self::Unbound(r) => write!(f, \"'{r}' is broken\"),", CL, 'one_binding', ''),
     ('unbound-hides-the-tool', ROLE, "Self::Unbound(r) => write!(f, \"no model is chosen for '{r}'\"),", "Self::Unbound(_) => write!(f, \"no model is chosen\"),", CL, 'one_binding', ''),
-    ('choose-writes-nothing', TOOLS, '            set_default(store, binding);\n            Ok::<(), AiError>(())', '            let _ = binding;\n            Ok::<(), AiError>(())', CL, 'one_binding', ''),
+    ('choose-writes-nothing', TOOLS, '            set_default(store, binding);\n            Ok(true)', '            let _ = binding;\n            Ok(true)', CL, 'one_binding', ''),
 ]
 
 PICK_G = C + 'ai-client/src/picker_groups.rs'
