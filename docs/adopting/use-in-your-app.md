@@ -111,6 +111,12 @@ developer words to it, and do not translate it into something vaguer.
 Call `status` again whenever the tool is about to be used, not once at start-up. A person can
 change their choice in the launcher while your app is open.
 
+**One call for every tool.** An app that only needs to know what is available, for a menu or a
+settings page, can skip the role lookup. `craft_ai_client::AppTools::standard("wordcraft")` reads
+the same shared choices and `report()` lists every catalogue tool with its `RoleStatus`. It reads
+only: no key, no request, nothing written. Use `role(id)` and `client()` when you go on to `plan`
+and `start`.
+
 ## 5. Build the request
 
 A `Request` names a capability and carries typed inputs. The type matters: a mask is not just
