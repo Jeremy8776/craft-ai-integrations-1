@@ -123,9 +123,10 @@ Use `role(id)` and `client()` when you go on to `plan` and `start`.
 loop. `request(id)` starts a request with the tool's capability, `plan(id, request)` checks it
 against the model the person chose (nothing is sent), you do the consent step in section 7, and
 `run(&plan, &ledger)` starts the job, waits and returns its outputs. `canceller()` gives a handle
-that stops the running job from any thread. `run` blocks, so call it off the drawing thread, and
-it runs one job at a time per `AppTools`. Every app runs a tool this way, so a chosen model behaves
-the same in all of them; only what the app does with the outputs differs.
+that stops every job being waited for, from any thread. `run` blocks, so call it off the drawing
+thread. It gives up and cancels a job after three minutes; `run_for(&plan, &ledger, limit)` lets
+an app that expects longer, such as video, choose its own limit. Every app runs a tool this way, so
+a chosen model behaves the same in all of them; only what the app does with the outputs differs.
 
 ## 5. Build the request
 

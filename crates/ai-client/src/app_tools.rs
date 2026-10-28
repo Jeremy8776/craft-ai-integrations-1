@@ -1,8 +1,9 @@
-//! What an app reads from the person's shared AI choices, in one call.
+//! What an app reads from the person's shared AI choices, and how it runs one.
 //!
 //! Every Craft app does the same first step: build one [`AiClient`] under its own app id, then ask,
-//! for each tool in the suite catalogue, whether it can run now. [`AppTools`] is that step, so an
-//! app copies no catalogue code and names no model, engine or file.
+//! for each tool in the suite catalogue, whether it can run now. [`AppTools`] is that step, and the
+//! plan and run that follow, so an app copies no catalogue or job code and names no model, engine
+//! or file.
 //!
 //! Invariants:
 //! - Reading changes nothing: nothing is sent and the shared store is not written. A tool bound to
@@ -17,6 +18,7 @@
 //! - The answer is computed on every call, so a choice made in the launcher while the app is open
 //!   is seen at once.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -27,7 +29,7 @@ use crate::{AiClient, Job, Plan, RoleStatus};
 
 /// How often a running job is looked at.
 const STEP: Duration = Duration::from_millis(15);
-/// The longest a job may run before it is given up.
+/// The longest [`AppTools::run`] waits for a job before it gives up and cancels it.
 const LIMIT: Duration = Duration::from_secs(180);
 
 /// One catalogue tool and whether it can run in this app now.
@@ -41,32 +43,34 @@ pub struct ToolReport {
     pub status: RoleStatus,
 }
 
-/// An app's read-only view of the shared tool choices.
+/// An app's view of the shared tool choices: list them, plan a run, run it.
 pub struct AppTools {
     client: AiClient,
     roles: Vec<(String, Role)>,
     running: Running,
+    next_job: AtomicU64,
 }
 
-/// The job a [`AppTools::run`] call is waiting for, so a cancel can reach it.
-type Running = Arc<Mutex<Option<Job>>>;
+/// The jobs [`AppTools::run`] calls are waiting for, so a cancel can reach them. Each has a number
+/// so a finished job removes only itself.
+type Running = Arc<Mutex<Vec<(u64, Job)>>>;
 
-/// Lets another thread stop the job an [`AppTools`] is waiting for.
+/// Lets another thread stop the jobs an [`AppTools`] is waiting for.
 #[derive(Clone)]
 pub struct Canceller(Running);
 
 impl Canceller {
-    /// Asks the running job, if any, to stop. Does nothing when no job is running.
+    /// Asks every job being waited for to stop. Does nothing when none is running.
     pub fn cancel(&self) {
-        let job = lock(&self.0).clone();
-        if let Some(job) = job {
+        let jobs: Vec<Job> = lock(&self.0).iter().map(|(_, job)| job.clone()).collect();
+        for job in jobs {
             let _ = job.cancel();
         }
     }
 }
 
-/// The lock on the running job, with a poisoned lock recovered.
-fn lock(running: &Running) -> MutexGuard<'_, Option<Job>> {
+/// The lock on the running jobs, with a poisoned lock recovered.
+fn lock(running: &Running) -> MutexGuard<'_, Vec<(u64, Job)>> {
     running.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -93,6 +97,7 @@ impl AppTools {
             client,
             roles,
             running: Running::default(),
+            next_job: AtomicU64::new(0),
         }
     }
 
@@ -127,8 +132,8 @@ impl AppTools {
         }
     }
 
-    /// The tool's role, for the `plan` and `start` calls on [`client`](Self::client). The role is owned because a custom tool is
-    /// read from the shared store on each call.
+    /// The tool's role, for the `plan` and `start` calls on [`client`](Self::client). The role is
+    /// owned because a custom tool is read from the shared store on each call.
     pub fn role(&self, tool: &str) -> Option<Role> {
         if let Some((_, role)) = self.roles.iter().find(|(_, role)| role.id.as_str() == tool) {
             return Some(role.clone());
@@ -169,18 +174,39 @@ impl AppTools {
 
     /// Starts the planned job, waits for it, and returns what it produced. `ledger` is the
     /// person's consent; a local model needs none, so `ConsentLedger::default()` serves it.
-    /// Blocks, so call it off the drawing thread. One job at a time per `AppTools`: a second call
-    /// replaces what [`Canceller`] can reach.
+    /// Blocks, so call it off the drawing thread. Gives up and cancels the job after three
+    /// minutes; use [`run_for`](Self::run_for) for a job that takes longer, such as video.
     ///
     /// # Errors
-    /// Returns the sentence to show when consent is missing, the job fails or is cancelled, or
-    /// it ends without finishing.
+    /// Returns the sentence to show when consent is missing, the job fails, is cancelled or times
+    /// out, or it ends without finishing.
     pub fn run(&self, plan: &Plan, ledger: &ConsentLedger) -> Result<Vec<Output>, String> {
+        self.run_for(plan, ledger, LIMIT)
+    }
+
+    /// [`run`](Self::run) with the longest wait chosen by the app. A job still running when
+    /// `limit` passes is cancelled, never left running unseen.
+    ///
+    /// # Errors
+    /// As [`run`](Self::run).
+    pub fn run_for(
+        &self,
+        plan: &Plan,
+        ledger: &ConsentLedger,
+        limit: Duration,
+    ) -> Result<Vec<Output>, String> {
         let job = self.client.start(plan, ledger).map_err(|e| e.message)?;
-        *lock(&self.running) = Some(job.clone());
-        let done = job.wait(STEP, LIMIT);
-        *lock(&self.running) = None;
-        let done = done.map_err(|e| e.message)?;
+        let number = self.next_job.fetch_add(1, Ordering::Relaxed);
+        lock(&self.running).push((number, job.clone()));
+        let done = job.wait(STEP, limit);
+        lock(&self.running).retain(|(n, _)| *n != number);
+        let done = match done {
+            Ok(done) => done,
+            Err(error) => {
+                let _ = job.cancel();
+                return Err(error.message);
+            }
+        };
         match done.state {
             JobState::Succeeded => Ok(done
                 .events
@@ -196,7 +222,7 @@ impl AppTools {
         }
     }
 
-    /// The handle that cancels whatever [`run`](Self::run) is waiting for, from any thread.
+    /// The handle that cancels every job [`run`](Self::run) is waiting for, from any thread.
     pub fn canceller(&self) -> Canceller {
         Canceller(self.running.clone())
     }

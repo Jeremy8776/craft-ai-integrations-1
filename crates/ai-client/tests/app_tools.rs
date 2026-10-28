@@ -5,6 +5,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use craft_ai_client::{
@@ -147,6 +148,8 @@ fn a_custom_tool_is_listed_after_the_catalogue() -> TestResult {
 #[derive(Clone)]
 struct Fake {
     hang: bool,
+    /// Set when a waiting run was stopped by a cancel.
+    stopped: Arc<AtomicBool>,
 }
 
 struct FakeLoaded(Fake);
@@ -173,7 +176,10 @@ impl LoadedModel for FakeLoaded {
     fn run(&mut self, _: &Request, ctx: &RunContext) -> Result<Vec<Output>, AiError> {
         if self.0.hang {
             loop {
-                ctx.check_cancelled()?;
+                if let Err(error) = ctx.check_cancelled() {
+                    self.0.stopped.store(true, Ordering::SeqCst);
+                    return Err(error);
+                }
                 std::thread::sleep(Duration::from_millis(5));
             }
         }
@@ -220,6 +226,13 @@ fn bound_tools(
     ))
 }
 
+fn fake(hang: bool) -> Fake {
+    Fake {
+        hang,
+        stopped: Arc::default(),
+    }
+}
+
 fn picture_request(tools: &AppTools) -> Request {
     tools.request("select-subject").unwrap().with_input(
         InputRole::Source,
@@ -231,7 +244,7 @@ fn picture_request(tools: &AppTools) -> Request {
 #[test]
 fn plan_then_run_returns_what_the_chosen_model_produced() -> TestResult {
     for app in ["lightcraft", "pdfcraft"] {
-        let (tools, _dir) = bound_tools(app, Some(Fake { hang: false }))?;
+        let (tools, _dir) = bound_tools(app, Some(fake(false)))?;
         let plan = tools.plan("select-subject", picture_request(&tools))?;
         let outputs = tools.run(&plan, &ConsentLedger::default())?;
         assert_eq!(outputs.len(), 1, "{app}");
@@ -274,7 +287,7 @@ fn planning_without_a_choice_or_an_unknown_tool_is_a_sentence() -> TestResult {
 /// Cancel from another thread reaches the running job, and a cancel with nothing running is harmless.
 #[test]
 fn cancel_reaches_the_running_job_and_is_harmless_otherwise() -> TestResult {
-    let (tools, _dir) = bound_tools("effectcraft", Some(Fake { hang: true }))?;
+    let (tools, _dir) = bound_tools("effectcraft", Some(fake(true)))?;
     let canceller = tools.canceller();
     canceller.cancel();
     let plan = tools.plan("select-subject", picture_request(&tools))?;
@@ -288,5 +301,54 @@ fn cancel_reaches_the_running_job_and_is_harmless_otherwise() -> TestResult {
     stopper.join().unwrap();
     assert!(error.to_lowercase().contains("cancel"), "{error}");
     tools.canceller().cancel();
+    Ok(())
+}
+
+/// Two jobs waiting at once are both reached by one cancel, and a finished job removes only itself.
+#[test]
+fn one_cancel_reaches_every_job_being_waited_for() -> TestResult {
+    let (tools, _dir) = bound_tools("filmcraft", Some(fake(true)))?;
+    let tools = Arc::new(tools);
+    let mut waiting = Vec::new();
+    for _ in 0..2 {
+        let tools = tools.clone();
+        let plan = tools.plan("select-subject", picture_request(&tools))?;
+        waiting.push(std::thread::spawn(move || {
+            tools.run(&plan, &ConsentLedger::default())
+        }));
+    }
+    std::thread::sleep(Duration::from_millis(100));
+    for _ in 0..200 {
+        tools.canceller().cancel();
+        if waiting.iter().all(|w| w.is_finished()) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    for w in waiting {
+        let error = w.join().unwrap().unwrap_err();
+        assert!(error.to_lowercase().contains("cancel"), "{error}");
+    }
+    Ok(())
+}
+
+/// A job still running when the wait ends is cancelled, not left running unseen.
+#[test]
+fn a_job_that_outlasts_the_wait_is_cancelled() -> TestResult {
+    let engine = fake(true);
+    let stopped = engine.stopped.clone();
+    let (tools, _dir) = bound_tools("soundcraft", Some(engine))?;
+    let plan = tools.plan("select-subject", picture_request(&tools))?;
+    let error = tools
+        .run_for(&plan, &ConsentLedger::default(), Duration::from_millis(100))
+        .unwrap_err();
+    assert!(!error.is_empty());
+    for _ in 0..200 {
+        if stopped.load(Ordering::SeqCst) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(stopped.load(Ordering::SeqCst), "the job was left running");
     Ok(())
 }
