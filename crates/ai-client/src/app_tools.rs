@@ -8,6 +8,8 @@
 //! - Reading changes nothing: nothing is sent and the shared store is not written. A tool bound to
 //!   a connection that needs a key is checked for a saved key, which asks the key store (the
 //!   system keychain may ask the person); the key is dropped at once and never used or returned.
+//! - [`AppTools::plan`] and [`AppTools::run`] are the one way an app runs a tool: plan (nothing is
+//!   sent), the app's own consent step, then run. No app writes its own job loop.
 //! - Tools people declared themselves (custom tools in the shared store) are listed after the
 //!   catalogue's, so a tool someone builds is seen by every app with no change to the catalogue.
 //! - A tool with no choice is `Unavailable` with a reason a person can read. It is never an error
@@ -15,10 +17,18 @@
 //! - The answer is computed on every call, so a choice made in the launcher while the app is open
 //!   is seen at once.
 
-use craft_ai_core::{AppId, Role};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
+
+use craft_ai_core::{AppId, ConsentLedger, Event, JobState, Output, Request, Role};
 use craft_ai_features::builtin;
 
-use crate::{AiClient, RoleStatus};
+use crate::{AiClient, Job, Plan, RoleStatus};
+
+/// How often a running job is looked at.
+const STEP: Duration = Duration::from_millis(15);
+/// The longest a job may run before it is given up.
+const LIMIT: Duration = Duration::from_secs(180);
 
 /// One catalogue tool and whether it can run in this app now.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,6 +45,29 @@ pub struct ToolReport {
 pub struct AppTools {
     client: AiClient,
     roles: Vec<(String, Role)>,
+    running: Running,
+}
+
+/// The job a [`AppTools::run`] call is waiting for, so a cancel can reach it.
+type Running = Arc<Mutex<Option<Job>>>;
+
+/// Lets another thread stop the job an [`AppTools`] is waiting for.
+#[derive(Clone)]
+pub struct Canceller(Running);
+
+impl Canceller {
+    /// Asks the running job, if any, to stop. Does nothing when no job is running.
+    pub fn cancel(&self) {
+        let job = lock(&self.0).clone();
+        if let Some(job) = job {
+            let _ = job.cancel();
+        }
+    }
+}
+
+/// The lock on the running job, with a poisoned lock recovered.
+fn lock(running: &Running) -> MutexGuard<'_, Option<Job>> {
+    running.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl AppTools {
@@ -56,7 +89,11 @@ impl AppTools {
             .into_iter()
             .filter_map(|feature| feature.role().map(|role| (feature.title, role)))
             .collect();
-        Self { client, roles }
+        Self {
+            client,
+            roles,
+            running: Running::default(),
+        }
     }
 
     /// Every catalogue tool in catalogue order, then every custom tool in the shared store, with
@@ -110,6 +147,58 @@ impl AppTools {
             .load()
             .map(|store| store.custom_tools)
             .unwrap_or_default()
+    }
+
+    /// A request for `tool`: its capability and no inputs yet. `None` for an unknown tool.
+    pub fn request(&self, tool: &str) -> Option<Request> {
+        self.role(tool).map(|role| Request::new(role.capability))
+    }
+
+    /// Checks `request` against the model the person chose for `tool`. Sends nothing. The plan
+    /// says what would leave this computer, so the app can ask for consent before [`run`](Self::run).
+    ///
+    /// # Errors
+    /// Returns the sentence to show: the tool is unknown, nothing runnable is chosen, or the
+    /// request does not fit the chosen model.
+    pub fn plan(&self, tool: &str, request: Request) -> Result<Plan, String> {
+        let role = self
+            .role(tool)
+            .ok_or("This tool is not part of the suite yet.")?;
+        self.client.plan(&role, request).map_err(|e| e.message)
+    }
+
+    /// Starts the planned job, waits for it, and returns what it produced. `ledger` is the
+    /// person's consent; a local model needs none, so `ConsentLedger::default()` serves it.
+    /// Blocks, so call it off the drawing thread. One job at a time per `AppTools`: a second call
+    /// replaces what [`Canceller`] can reach.
+    ///
+    /// # Errors
+    /// Returns the sentence to show when consent is missing, the job fails or is cancelled, or
+    /// it ends without finishing.
+    pub fn run(&self, plan: &Plan, ledger: &ConsentLedger) -> Result<Vec<Output>, String> {
+        let job = self.client.start(plan, ledger).map_err(|e| e.message)?;
+        *lock(&self.running) = Some(job.clone());
+        let done = job.wait(STEP, LIMIT);
+        *lock(&self.running) = None;
+        let done = done.map_err(|e| e.message)?;
+        match done.state {
+            JobState::Succeeded => Ok(done
+                .events
+                .into_iter()
+                .filter_map(|event| match event {
+                    Event::Output(output) => Some(output),
+                    _ => None,
+                })
+                .collect()),
+            JobState::Failed { error } => Err(error.message),
+            JobState::Cancelled => Err("Cancelled.".to_owned()),
+            _ => Err("The job did not finish.".to_owned()),
+        }
+    }
+
+    /// The handle that cancels whatever [`run`](Self::run) is waiting for, from any thread.
+    pub fn canceller(&self) -> Canceller {
+        Canceller(self.running.clone())
     }
 
     /// The client behind the view, for `plan`, `start` and the consent calls.

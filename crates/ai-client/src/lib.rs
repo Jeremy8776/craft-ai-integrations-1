@@ -59,7 +59,7 @@ mod runner;
 mod setup_flow;
 mod tools;
 
-pub use app_tools::{AppTools, ToolReport};
+pub use app_tools::{AppTools, Canceller, ToolReport};
 pub use client::{AiClient, Choice, Finished, Job, PickedChoice, Plan, RoleReady, RoleStatus};
 /// File transfer and progress types, so a host does not depend on the local server crate.
 pub use craft_ai_comfy_env::{
