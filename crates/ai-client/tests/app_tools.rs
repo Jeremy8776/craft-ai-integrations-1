@@ -115,13 +115,20 @@ fn a_custom_tool_is_listed_after_the_catalogue() -> TestResult {
         capability: CapabilityId::parse("text.generate")?,
         inputs: vec![InputRole::Prompt],
     };
-    let launcher = AiClient::new(AppId::new("launcher")?, shared.clone(), Arc::new(MemoryStore::new()));
+    let launcher = AiClient::new(
+        AppId::new("launcher")?,
+        shared.clone(),
+        Arc::new(MemoryStore::new()),
+    );
     ToolDesk::new(launcher, shared.clone(), None).register_tool(role.clone())?;
 
     let tools = tools_for("soundcraft", &shared)?;
     let report = tools.report();
     let last = report.last().expect("the report has tools");
-    assert_eq!((last.id.as_str(), last.title.as_str()), ("my-tidy-tool", "My tidy tool"));
+    assert_eq!(
+        (last.id.as_str(), last.title.as_str()),
+        ("my-tidy-tool", "My tidy tool")
+    );
     assert!(matches!(&last.status, RoleStatus::Unavailable { reason } if !reason.is_empty()));
     assert_eq!(tools.role("my-tidy-tool"), Some(role));
     assert!(tools.role("select-subject").is_some());

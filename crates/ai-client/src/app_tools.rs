@@ -64,7 +64,10 @@ impl AppTools {
     /// when a menu or page opens, not on every frame.
     pub fn report(&self) -> Vec<ToolReport> {
         let custom = self.custom_tools();
-        let builtin = self.roles.iter().map(|(title, role)| (title.as_str(), role));
+        let builtin = self
+            .roles
+            .iter()
+            .map(|(title, role)| (title.as_str(), role));
         let declared = custom.iter().map(|role| (role.label.as_str(), role));
         builtin
             .chain(declared)
@@ -93,14 +96,20 @@ impl AppTools {
         if let Some((_, role)) = self.roles.iter().find(|(_, role)| role.id.as_str() == tool) {
             return Some(role.clone());
         }
-        self.custom_tools().into_iter().find(|role| role.id.as_str() == tool)
+        self.custom_tools()
+            .into_iter()
+            .find(|role| role.id.as_str() == tool)
     }
 
     /// The tools people declared in the shared store. A store that cannot be read has none here;
     /// [`RoleStatus`] carries the reason for each tool it is asked about. The store refuses a custom
     /// tool whose id is a catalogue id, so the two lists never overlap.
     fn custom_tools(&self) -> Vec<Role> {
-        self.client.shared.load().map(|store| store.custom_tools).unwrap_or_default()
+        self.client
+            .shared
+            .load()
+            .map(|store| store.custom_tools)
+            .unwrap_or_default()
     }
 
     /// The client behind the view, for `plan`, `start` and the consent calls.
