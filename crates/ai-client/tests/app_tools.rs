@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
-use craft_ai_client::{AiClient, AppTools, ProviderFactory, RoleStatus};
+use craft_ai_client::{AiClient, AppTools, ProviderFactory, RoleStatus, ToolDesk};
 use craft_ai_core::mock::{MockProvider, Outcome, Script};
-use craft_ai_core::{AppId, Provider};
+use craft_ai_core::{AppId, CapabilityId, InputRole, Provider, Role, RoleId};
 use craft_ai_native::secrets::MemoryStore;
 use craft_ai_native::shared::SharedStore;
 
@@ -101,4 +101,29 @@ fn a_bad_app_id_is_refused_with_a_sentence() {
         Ok(_) => panic!("an invalid app id was accepted"),
         Err(why) => assert!(!why.is_empty()),
     }
+}
+
+/// A tool someone declared in the shared store is listed after the catalogue, greyed with a reason
+/// until a model is chosen, and has a role to run.
+#[test]
+fn a_custom_tool_is_listed_after_the_catalogue() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let shared = SharedStore::new(dir.path().join("store.json"));
+    let role = Role {
+        id: RoleId::new("my-tidy-tool")?,
+        label: "My tidy tool".to_owned(),
+        capability: CapabilityId::parse("text.generate")?,
+        inputs: vec![InputRole::Prompt],
+    };
+    let launcher = AiClient::new(AppId::new("launcher")?, shared.clone(), Arc::new(MemoryStore::new()));
+    ToolDesk::new(launcher, shared.clone(), None).register_tool(role.clone())?;
+
+    let tools = tools_for("soundcraft", &shared)?;
+    let report = tools.report();
+    let last = report.last().expect("the report has tools");
+    assert_eq!((last.id.as_str(), last.title.as_str()), ("my-tidy-tool", "My tidy tool"));
+    assert!(matches!(&last.status, RoleStatus::Unavailable { reason } if !reason.is_empty()));
+    assert_eq!(tools.role("my-tidy-tool"), Some(role));
+    assert!(tools.role("select-subject").is_some());
+    Ok(())
 }

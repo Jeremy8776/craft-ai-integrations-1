@@ -113,9 +113,11 @@ change their choice in the launcher while your app is open.
 
 **One call for every tool.** An app that only needs to know what is available, for a menu or a
 settings page, can skip the role lookup. `craft_ai_client::AppTools::standard("wordcraft")` reads
-the same shared choices and `report()` lists every catalogue tool with its `RoleStatus`. It reads
-only: no key, no request, nothing written. Use `role(id)` and `client()` when you go on to `plan`
-and `start`.
+the same shared choices and `report()` lists every catalogue tool, then every custom tool someone
+declared, with its `RoleStatus`. It sends nothing and writes nothing. A tool bound to a connection
+that needs a key is checked for a saved key, so the key store is asked (the system keychain may
+prompt) and the key is dropped unused. Call `report()` when a menu or page opens, not every frame.
+Use `role(id)` and `client()` when you go on to `plan` and `start`.
 
 ## 5. Build the request
 
