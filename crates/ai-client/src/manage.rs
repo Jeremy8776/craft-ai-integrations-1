@@ -339,7 +339,7 @@ impl ConnectionManager {
         // are the ones a person declared, and a test never replaces them with guesses.
         if remember && report.probe.is_none() {
             let models = report.models.clone();
-            self.shared.update(|file| {
+            self.shared.try_update(|file| {
                 let saved = file
                     .connections
                     .iter_mut()
