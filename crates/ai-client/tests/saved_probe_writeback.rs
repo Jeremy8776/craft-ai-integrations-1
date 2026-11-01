@@ -1,4 +1,7 @@
 //! A saved model probe must not overwrite changes made while it is asking the service.
+#[path = "support/model_probe.rs"]
+mod model_probe;
+
 use std::sync::{Arc, Mutex};
 
 use craft_ai_client::{ConnectionManager, ProviderFactory};
@@ -7,6 +10,7 @@ use craft_ai_native::{
     secrets::{MemoryStore, SecretStore},
     shared::SharedStore,
 };
+use model_probe::ModelProbe;
 
 /// A plain model identity, sufficient for testing saved-list provenance.
 fn model(id: &str) -> ModelInfo {
@@ -24,32 +28,6 @@ fn connection() -> Connection {
 }
 
 type Edit = Arc<dyn Fn(&mut StoreFile) + Send + Sync>;
-
-struct Late {
-    shared: SharedStore,
-    edit: Edit,
-    after_edit: Arc<Mutex<Option<Vec<u8>>>>,
-}
-impl Provider for Late {
-    /// Simulates an intervening settings write before the old model answer arrives.
-    fn models(&self) -> Result<Vec<ModelInfo>, AiError> {
-        self.shared.update(|s| (self.edit)(s)).unwrap();
-        *self.after_edit.lock().unwrap() = Some(std::fs::read(self.shared.path()).unwrap());
-        Ok(vec![model("reported-old")])
-    }
-    /// A connection probe must never submit a job.
-    fn submit(&self, _: &ModelId, _: &Request) -> Result<JobId, AiError> {
-        Err(AiError::unsupported("not a job"))
-    }
-    /// The fixture has no jobs to poll.
-    fn poll(&self, _: &JobId) -> Result<JobSnapshot, AiError> {
-        Err(AiError::unsupported("not a job"))
-    }
-    /// The fixture has no jobs to cancel.
-    fn cancel(&self, _: &JobId) -> Result<(), AiError> {
-        Err(AiError::unsupported("not a job"))
-    }
-}
 
 struct World {
     _dir: tempfile::TempDir,
@@ -72,11 +50,12 @@ impl World {
         let mut factory = ProviderFactory::standard();
         let (store, after, edit) = (shared.clone(), after_edit.clone(), Arc::new(edit) as Edit);
         factory.register("probe-fake", move |_, _| {
-            Ok(Arc::new(Late {
-                shared: store.clone(),
-                edit: edit.clone(),
-                after_edit: after.clone(),
-            }))
+            let (store, after, edit) = (store.clone(), after.clone(), edit.clone());
+            Ok(Arc::new(ModelProbe::new(move || {
+                store.update(|s| (edit)(s)).unwrap();
+                *after.lock().unwrap() = Some(std::fs::read(store.path()).unwrap());
+                Ok(vec![model("reported-old")])
+            })))
         });
         let keys = Arc::new(MemoryStore::new());
         keys.set(

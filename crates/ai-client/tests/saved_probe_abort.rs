@@ -1,12 +1,13 @@
 //! Refusing a stale saved probe must not serialise or recreate the shared store.
+#[path = "support/model_probe.rs"]
+mod model_probe;
+
 use std::sync::{Arc, Mutex};
 
 use craft_ai_client::{ConnectionManager, ProviderFactory};
-use craft_ai_core::{
-    AiError, Connection, ConnectionId, ErrorKind, JobId, JobSnapshot, ModelId, ModelInfo, Provider,
-    Request, StoreFile,
-};
+use craft_ai_core::{Connection, ConnectionId, ErrorKind, ModelId, ModelInfo, StoreFile};
 use craft_ai_native::{secrets::MemoryStore, shared::SharedStore};
+use model_probe::ModelProbe;
 
 /// A valid connection with no real credential or service.
 fn connection() -> Connection {
@@ -20,39 +21,6 @@ fn connection() -> Connection {
 
 type Edit = Arc<dyn Fn(&SharedStore) + Send + Sync>;
 type SavedBytes = Arc<Mutex<Option<Vec<u8>>>>;
-
-struct Late {
-    shared: SharedStore,
-    edit: Edit,
-    after_edit: SavedBytes,
-}
-impl Provider for Late {
-    /// Applies an external edit or deletion before the original probe's answer arrives.
-    fn models(&self) -> Result<Vec<ModelInfo>, AiError> {
-        (self.edit)(&self.shared);
-        *self.after_edit.lock().unwrap() = match std::fs::read(self.shared.path()) {
-            Ok(bytes) => Some(bytes),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-            Err(e) => panic!("cannot read the fixture after its edit: {e}"),
-        };
-        Ok(vec![ModelInfo::new(
-            ModelId::new("old-answer").unwrap(),
-            "Old answer",
-        )])
-    }
-    /// A probe must not submit jobs.
-    fn submit(&self, _: &ModelId, _: &Request) -> Result<JobId, AiError> {
-        Err(AiError::unsupported("not a job"))
-    }
-    /// This fixture has no jobs.
-    fn poll(&self, _: &JobId) -> Result<JobSnapshot, AiError> {
-        Err(AiError::unsupported("not a job"))
-    }
-    /// This fixture has no work to cancel.
-    fn cancel(&self, _: &JobId) -> Result<(), AiError> {
-        Err(AiError::unsupported("not a job"))
-    }
-}
 
 struct World {
     _dir: tempfile::TempDir,
@@ -75,11 +43,19 @@ impl World {
         let (store, after, edit) = (shared.clone(), after_edit.clone(), Arc::new(edit) as Edit);
         let mut factory = ProviderFactory::standard();
         factory.register("abort-fake", move |_, _| {
-            Ok(Arc::new(Late {
-                shared: store.clone(),
-                edit: edit.clone(),
-                after_edit: after.clone(),
-            }))
+            let (store, after, edit) = (store.clone(), after.clone(), edit.clone());
+            Ok(Arc::new(ModelProbe::new(move || {
+                (edit)(&store);
+                *after.lock().unwrap() = match std::fs::read(store.path()) {
+                    Ok(bytes) => Some(bytes),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                    Err(e) => panic!("cannot read the fixture after its edit: {e}"),
+                };
+                Ok(vec![ModelInfo::new(
+                    ModelId::new("old-answer").unwrap(),
+                    "Old answer",
+                )])
+            })))
         });
         let manager = ConnectionManager::new(shared.clone(), Arc::new(MemoryStore::new()))
             .with_probe_factory(factory);
