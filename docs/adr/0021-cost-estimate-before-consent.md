@@ -9,7 +9,7 @@ A person should see what a hosted job may cost before agreeing to send it. A wro
 
 ## Decision
 
-`AiClient::plan` works out a `CostEstimate` from the saved model's `pricing`, reading no key and contacting nothing. The rule in `craft_ai_core::cost::estimate` is the per-image price times the results asked for. A token price above zero, a missing price or an overflow gives `None`. Two stated zero token prices with no per-image price give zero.
+`AiClient::plan` works out a `CostEstimate` from the saved model's `pricing`, reading no key and contacting nothing. The rule in `craft_ai_core::cost::estimate` is the per-image price times the results asked for. A token price above zero, no pricing at all, or an overflow gives `None`. With no per-image price, two stated zero token prices give zero and anything else gives `None`. A per-image price gives an estimate even when token prices are missing.
 
 ## Consequences
 
